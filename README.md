@@ -2,7 +2,7 @@
 
 A bookmarklet for interactively picking, deleting, and undoing DOM elements on any page — no extension, no dependencies, just drag-and-drop.
 
-Current version: **1.0.0**
+Current version: **1.0.1**
 
 ## Install
 
