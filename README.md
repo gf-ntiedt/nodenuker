@@ -1,18 +1,22 @@
 # NodeNuker
 
-A bookmarklet for interactively picking, deleting, and undoing DOM elements on any page — no extension, no dependencies, just drag-and-drop.
+A tool for interactively picking, deleting, and undoing DOM elements on any page — no dependencies, available as a bookmarklet or a userscript.
 
-Current version: **1.0.1**
+Current version: **1.1.0**
 
 ## Install
 
-Open [`index.html`](index.html) in a browser and drag the **🚀 NodeNuker** button to your bookmarks bar.
+Open [`index.html`](index.html) in a browser and pick one of three install methods — all three run the exact same NodeNuker code and behave identically, they only differ in delivery/update mechanism:
 
-Chrome hides the bookmarks bar by default. Show it with `Ctrl+Shift+B` (`Cmd+Shift+B` on macOS), or via the menu (⋮ → Bookmarks and lists → Show bookmarks bar), before dragging the button.
+1. **Direct bookmarklet** — drag the **🚀 NodeNuker** button to your bookmarks bar. Simplest option, nothing else to install. Downside: every new version needs the button dragged again to replace the old one.
+2. **Loader bookmarklet** — drag the **🚀 NodeNuker (auto-update)** button instead. It's a tiny bookmarklet that injects a `<script>` tag fetching the current `nodenuker.js` from GitHub Pages on every click, so it never needs re-adding. Limitation: blocked on pages whose CSP disallows scripts from `gf-ntiedt.github.io`.
+3. **Userscript** (Violentmonkey / Tampermonkey) — install a userscript manager ([Violentmonkey](https://violentmonkey.github.io/), open source, Firefox/Chrome/Edge; or [Tampermonkey](https://www.tampermonkey.net/), closed source, the only one also covering Safari via a paid App Store purchase), then open [`nodenuker.user.js`](nodenuker.user.js) — the manager offers to install it. Runs on every page, updates itself automatically via `@updateURL`, and is toggled on/off from the manager's toolbar menu (**Toggle NodeNuker**) instead of a bookmarks bar click.
+
+Chrome hides the bookmarks bar by default. Show it with `Ctrl+Shift+B` (`Cmd+Shift+B` on macOS), or via the menu (⋮ → Bookmarks and lists → Show bookmarks bar), before dragging a bookmarklet button.
 
 ## Usage
 
-1. Click the bookmarklet on any page to activate it.
+1. Click the bookmarklet on any page to activate it (or use the userscript manager's **Toggle NodeNuker** menu command).
 2. Hover over elements — the one under the cursor is outlined in blue.
 3. Click an element to select it (outlined in red). Its direct parent is shown with a dashed purple outline — a preview of what `p` would select next.
 4. The HUD at the bottom of the page shows keyboard-key-styled buttons for every command — click one directly instead of pressing the key, if you prefer. Hover over any button for a fuller description (native tooltip).
@@ -43,7 +47,7 @@ This effectively works like an "isolate this element" mode — pressing `Delete`
 - Clicking a different element exits invert mode and starts a fresh single selection.
 - `Delete` while inverted removes every element in the inverted selection in one go (each pushed onto the undo stack individually, so `z` undoes them one at a time).
 
-Running the bookmarklet again while it's active toggles it off, same as `Esc`.
+Running the bookmarklet again (or the userscript's toggle menu command) while it's active toggles it off, same as `Esc`.
 
 ### Image actions (`↗` open / `⬇` download)
 
@@ -70,10 +74,12 @@ Whenever an element is selected, a `</>` / `copy html` button appears in the HUD
 
 ## Files
 
-- [`nodenuker.js`](nodenuker.js) — readable source, the single source of truth.
-- [`build.js`](build.js) — regenerates `bookmarklet.uri.txt` and updates the link in `index.html`. Run `node build.js` after editing `nodenuker.js`.
-- [`bookmarklet.uri.txt`](bookmarklet.uri.txt) — the generated `javascript:` URI, kept in sync via the build script.
-- [`index.html`](index.html) — install page with the draggable bookmarklet link and instructions.
+- [`nodenuker.js`](nodenuker.js) — readable source, the single source of truth for all three install methods.
+- [`build.js`](build.js) — regenerates all three artifacts below and updates the bookmarklet links in `index.html`. Run `node build.js` after editing `nodenuker.js`.
+- [`bookmarklet.uri.txt`](bookmarklet.uri.txt) — the generated direct-bookmarklet `javascript:` URI, kept in sync via the build script.
+- [`bookmarklet-loader.uri.txt`](bookmarklet-loader.uri.txt) — the generated loader-bookmarklet `javascript:` URI.
+- [`nodenuker.user.js`](nodenuker.user.js) — the generated Violentmonkey/Tampermonkey userscript.
+- [`index.html`](index.html) — install page with all three install options and instructions.
 
 ## Disclaimer
 

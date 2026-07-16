@@ -1,0 +1,1 @@
+javascript:(function%20()%20%7B%0A%20%20'use%20strict'%3B%0A%20%20var%20s%20%3D%20document.createElement('script')%3B%0A%20%20s.src%20%3D%20'https%3A%2F%2Fgf-ntiedt.github.io%2Fnodenuker%2Fnodenuker.js%3Ft%3D'%20%2B%20Date.now()%3B%0A%20%20s.onload%20%3D%20function%20()%20%7B%20s.remove()%3B%20%7D%3B%0A%20%20document.documentElement.appendChild(s)%3B%0A%7D)()%3B

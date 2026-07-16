@@ -1,3 +1,19 @@
+// ==UserScript==
+// @name         NodeNuker
+// @namespace    https://github.com/gf-ntiedt/nodenuker
+// @version      1.1.0
+// @description  Point. Click. Nuke. Interactive DOM element picker, deleter & undo tool.
+// @author       Gedankenfolger GmbH
+// @match        *://*/*
+// @grant        GM_registerMenuCommand
+// @run-at       document-idle
+// @updateURL    https://gf-ntiedt.github.io/nodenuker/nodenuker.user.js
+// @downloadURL  https://gf-ntiedt.github.io/nodenuker/nodenuker.user.js
+// @license      GPL-3.0-or-later
+// ==/UserScript==
+
+window.__NODENUKER_NO_AUTORUN = true;
+
 /**
  * NodeNuker — interactive DOM element picker, deleter & undo tool.
  *
@@ -669,4 +685,8 @@ function nodeNukerToggle() {
 
 if (typeof window.__NODENUKER_NO_AUTORUN === 'undefined') {
   nodeNukerToggle();
+}
+
+if (typeof GM_registerMenuCommand === 'function') {
+  GM_registerMenuCommand('Toggle NodeNuker', nodeNukerToggle);
 }
