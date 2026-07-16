@@ -30,6 +30,10 @@
  *   copy html    copies the selected element's outerHTML to the clipboard
  *   open/download image  shown when the selection is an <img> or has a
  *                        CSS background-image
+ *   info         opens a separate panel with quick facts (font size incl.
+ *                px/rem conversion, font family/weight, color, background,
+ *                href) for the selected element, each individually
+ *                copyable, plus a toggle to view/copy all computed styles
  *
  * Runs automatically when loaded (bookmarklet / loader-script use), unless
  * window.__NODENUKER_NO_AUTORUN is set beforehand — the userscript build sets
@@ -45,7 +49,7 @@ function nodeNukerToggle() {
   var COLOR_KEEP = '#51cf66';
   var COLOR_PARENT = '#9775fa';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.1.2';
+  var VERSION = '1.2.0';
 
   if (window.__nodeNuker && window.__nodeNuker.active) {
     window.__nodeNuker.deactivate();
@@ -65,7 +69,10 @@ function nodeNukerToggle() {
     invertGroups: [],
     invertTargets: [],
     invertBoxes: [],
-    imageUrl: null
+    imageUrl: null,
+    infoPanel: null,
+    infoPanelOpen: false,
+    infoView: 'quick'
   };
 
   function getImageUrl(el) {
@@ -115,27 +122,164 @@ function nodeNukerToggle() {
     ta.remove();
   }
 
-  function copyHtml(btn) {
-    var el = state.selected;
-    if (!el) return;
-    var html = el.outerHTML;
+  function copyText(text, flashEl) {
     function flash() {
-      if (!btn) return;
-      var labelEl = btn.lastChild;
-      if (!labelEl) return;
-      var original = labelEl.textContent;
-      labelEl.textContent = 'copied!';
-      setTimeout(function () { labelEl.textContent = original; }, 900);
+      if (!flashEl) return;
+      var original = flashEl.textContent;
+      flashEl.textContent = 'copied!';
+      setTimeout(function () { flashEl.textContent = original; }, 900);
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(html).then(flash).catch(function () {
-        legacyCopy(html);
+      navigator.clipboard.writeText(text).then(flash).catch(function () {
+        legacyCopy(text);
         flash();
       });
     } else {
-      legacyCopy(html);
+      legacyCopy(text);
       flash();
     }
+  }
+
+  function copyHtml(btn) {
+    var el = state.selected;
+    if (!el) return;
+    copyText(el.outerHTML, btn ? btn.lastChild : null);
+  }
+
+  function copyElementText(btn) {
+    var el = state.selected;
+    if (!el) return;
+    copyText(el.innerText || '', btn ? btn.lastChild : null);
+  }
+
+  function rootFontSizePx() {
+    return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  }
+
+  function pxToRemLabel(pxValue) {
+    var px = parseFloat(pxValue);
+    if (isNaN(px)) return pxValue;
+    var rem = Math.round((px / rootFontSizePx()) * 1000) / 1000;
+    return px + 'px (' + rem + 'rem)';
+  }
+
+  function rgbToHex(colorStr) {
+    var m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(colorStr || '');
+    if (!m) return null;
+    var alpha = m[4] !== undefined ? parseFloat(m[4]) : 1;
+    if (alpha === 0) return null;
+    function hex(n) { return ('0' + parseInt(n, 10).toString(16)).slice(-2); }
+    return '#' + hex(m[1]) + hex(m[2]) + hex(m[3]);
+  }
+
+  function colorLabel(colorStr) {
+    var hex = rgbToHex(colorStr);
+    return hex ? (colorStr + ' (' + hex + ')') : colorStr;
+  }
+
+  function getQuickInfo(el) {
+    var cs = getComputedStyle(el);
+    var fields = [];
+    if (el.id) fields.push({ label: 'ID', value: el.id });
+    if (el.className && typeof el.className === 'string' && el.className.trim()) {
+      fields.push({ label: 'Class', value: el.className.trim() });
+    }
+    fields.push({ label: 'Font size', value: pxToRemLabel(cs.fontSize) });
+    fields.push({ label: 'Font family', value: cs.fontFamily });
+    fields.push({ label: 'Font weight', value: cs.fontWeight });
+    fields.push({ label: 'Color', value: colorLabel(cs.color) });
+    var bgHex = rgbToHex(cs.backgroundColor);
+    if (bgHex) fields.push({ label: 'Background', value: cs.backgroundColor + ' (' + bgHex + ')' });
+    if (el.tagName === 'A' && el.href) fields.push({ label: 'Href', value: el.href });
+    return fields;
+  }
+
+  // Standard CSS "inherited by default" properties (per spec). Used below to
+  // tell apart values inherited from an ancestor from plain browser defaults
+  // once a property isn't explicitly declared on the element itself.
+  var INHERITED_PROPS = {
+    'color': 1, 'cursor': 1, 'direction': 1, 'empty-cells': 1,
+    'font': 1, 'font-family': 1, 'font-size': 1, 'font-size-adjust': 1,
+    'font-style': 1, 'font-variant': 1, 'font-weight': 1, 'font-stretch': 1,
+    'letter-spacing': 1, 'line-height': 1,
+    'list-style': 1, 'list-style-image': 1, 'list-style-position': 1, 'list-style-type': 1,
+    'orphans': 1, 'widows': 1, 'quotes': 1, 'tab-size': 1,
+    'text-align': 1, 'text-align-last': 1, 'text-indent': 1, 'text-justify': 1,
+    'text-shadow': 1, 'text-transform': 1,
+    'visibility': 1, 'white-space': 1,
+    'word-break': 1, 'word-spacing': 1, 'overflow-wrap': 1,
+    'caption-side': 1, 'border-collapse': 1, 'border-spacing': 1,
+    'hyphens': 1, 'image-rendering': 1, 'writing-mode': 1
+  };
+
+  function collectMatchingRuleProps(rules, el, props) {
+    for (var i = 0; i < rules.length; i++) {
+      var rule = rules[i];
+      if (rule.selectorText && rule.style) {
+        var matches = false;
+        try { matches = el.matches(rule.selectorText); } catch (e) { matches = false; }
+        if (matches) {
+          for (var j = 0; j < rule.style.length; j++) {
+            props[rule.style[j]] = true;
+          }
+        }
+      } else if (rule.cssRules) {
+        collectMatchingRuleProps(rule.cssRules, el, props);
+      }
+    }
+  }
+
+  // Properties actually declared for this element: inline style plus any
+  // same-origin stylesheet rule whose selector matches it. Cross-origin
+  // stylesheets without CORS headers throw on .cssRules and are skipped, so
+  // properties coming purely from such a sheet are misreported as
+  // "inherited"/"default" below — a real limitation, not a bug.
+  function getOwnDeclaredProps(el) {
+    var props = {};
+    for (var i = 0; i < el.style.length; i++) {
+      props[el.style[i]] = true;
+    }
+    var sheets = document.styleSheets;
+    for (var s = 0; s < sheets.length; s++) {
+      var rules;
+      try {
+        rules = sheets[s].cssRules;
+      } catch (e) {
+        continue;
+      }
+      if (!rules) continue;
+      collectMatchingRuleProps(rules, el, props);
+    }
+    return props;
+  }
+
+  function getAllStylesText(el) {
+    var cs = getComputedStyle(el);
+    var own = getOwnDeclaredProps(el);
+    var ownLines = [];
+    var inheritedLines = [];
+    var defaultLines = [];
+    for (var i = 0; i < cs.length; i++) {
+      var prop = cs[i];
+      var line = prop + ': ' + cs.getPropertyValue(prop) + ';';
+      if (own[prop]) {
+        ownLines.push(line);
+      } else if (INHERITED_PROPS[prop]) {
+        inheritedLines.push(line);
+      } else {
+        defaultLines.push(line);
+      }
+    }
+    return [
+      '/* Set on this element (' + ownLines.length + ') */',
+      ownLines.length ? ownLines.join('\n') : '(none)',
+      '',
+      '/* Inherited (' + inheritedLines.length + ') */',
+      inheritedLines.length ? inheritedLines.join('\n') : '(none)',
+      '',
+      '/* Browser default (' + defaultLines.length + ') */',
+      defaultLines.join('\n')
+    ].join('\n');
   }
 
   function makeBox(color, dashed, labelBelow) {
@@ -289,7 +433,9 @@ function nodeNukerToggle() {
     });
 
     var ELEMENT_ACTIONS = [
-      { key: '</>', label: 'copy html', title: 'Copy HTML: copy the selected element\'s outerHTML to the clipboard', fn: function (btn) { copyHtml(btn); } }
+      { key: '</>', label: 'copy html', title: 'Copy HTML: copy the selected element\'s outerHTML to the clipboard', fn: function (btn) { copyHtml(btn); } },
+      { key: 'Aa', label: 'copy text', title: 'Copy text: copy the selected element\'s rendered visible text (element.innerText) to the clipboard', fn: function (btn) { copyElementText(btn); } },
+      { key: 'ⓘ', label: 'info', title: 'Info: show font, color, background and href values for the selected element in a separate panel, with an option to view and copy all computed styles', fn: function () { toggleInfoPanel(); } }
     ];
     var elementActionsRow = hud.querySelector('[data-role="elementActions"]');
     ELEMENT_ACTIONS.forEach(function (a) {
@@ -315,6 +461,156 @@ function nodeNukerToggle() {
       elementActionsRow: elementActionsRow,
       imageActionsRow: imageActionsRow
     };
+  }
+
+  function buildInfoPanel() {
+    var panel = document.createElement('div');
+    panel.setAttribute(NS, '1');
+    panel.style.cssText = [
+      'position:fixed',
+      'top:20px', 'right:20px',
+      'width:320px',
+      'max-height:70vh',
+      'overflow:auto',
+      'background:rgba(20,20,20,.97)',
+      'color:#f5f5f5',
+      'font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'padding:12px 14px',
+      'border-radius:8px',
+      'z-index:' + Z_INDEX,
+      'box-shadow:0 4px 16px rgba(0,0,0,.35)',
+      'pointer-events:auto',
+      'display:none'
+    ].join(';');
+    panel.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">' +
+        '<strong data-role="infoTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Element info</strong>' +
+        '<button type="button" data-role="infoClose" title="Close" style="pointer-events:auto;cursor:pointer;background:none;border:0;color:#f5f5f5;font-size:16px;line-height:1;flex:none">×</button>' +
+      '</div>' +
+      '<div data-role="infoBody"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px">' +
+        '<button type="button" data-role="infoCopyAll" style="pointer-events:auto;cursor:pointer;background:#3a3f4b;border:1px solid #565d6d;border-radius:6px;color:#f5f5f5;padding:4px 8px;font:11px monospace">Copy all</button>' +
+        '<button type="button" data-role="infoToggleAll" style="pointer-events:auto;cursor:pointer;background:#3a3f4b;border:1px solid #565d6d;border-radius:6px;color:#f5f5f5;padding:4px 8px;font:11px monospace">Show all styles</button>' +
+      '</div>';
+    document.documentElement.appendChild(panel);
+    var api = {
+      root: panel,
+      title: panel.querySelector('[data-role="infoTitle"]'),
+      close: panel.querySelector('[data-role="infoClose"]'),
+      body: panel.querySelector('[data-role="infoBody"]'),
+      copyAll: panel.querySelector('[data-role="infoCopyAll"]'),
+      toggleAll: panel.querySelector('[data-role="infoToggleAll"]')
+    };
+    api.close.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideInfoPanel();
+    });
+    return api;
+  }
+
+  function renderInfoRow(container, label, value) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:3px 0;border-bottom:1px solid #333';
+    var labelEl = document.createElement('span');
+    labelEl.style.cssText = 'opacity:.7;white-space:nowrap;flex:none';
+    labelEl.textContent = label;
+    var valueEl = document.createElement('span');
+    valueEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:right';
+    valueEl.textContent = value;
+    valueEl.title = value;
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = '⧉';
+    copyBtn.title = 'Copy ' + label;
+    copyBtn.style.cssText = 'pointer-events:auto;cursor:pointer;background:none;border:0;color:#4dabf7;font-size:13px;flex:none;margin-left:6px';
+    copyBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      copyText(value, valueEl);
+    });
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    row.appendChild(copyBtn);
+    container.appendChild(row);
+  }
+
+  function renderQuickInfo(panel, el) {
+    panel.title.textContent = 'Info: ' + describe(el);
+    panel.body.innerHTML = '';
+    var fields = getQuickInfo(el);
+    if (!fields.length) {
+      var empty = document.createElement('div');
+      empty.style.opacity = '.7';
+      empty.textContent = 'No notable styles found.';
+      panel.body.appendChild(empty);
+    } else {
+      fields.forEach(function (f) {
+        renderInfoRow(panel.body, f.label, f.value);
+      });
+    }
+    panel.toggleAll.textContent = 'Show all styles';
+    panel.copyAll.onclick = function () {
+      var text = fields.map(function (f) { return f.label + ': ' + f.value; }).join('\n');
+      copyText(text, panel.copyAll);
+    };
+    panel.toggleAll.onclick = function () {
+      state.infoView = 'all';
+      renderAllStyles(panel, el);
+    };
+  }
+
+  function renderAllStyles(panel, el) {
+    panel.title.textContent = 'All styles: ' + describe(el);
+    var text = getAllStylesText(el);
+    panel.body.innerHTML = '';
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font:11px/1.4 monospace;margin:0;max-height:45vh;overflow:auto';
+    pre.textContent = text;
+    panel.body.appendChild(pre);
+    panel.toggleAll.textContent = '← Back';
+    panel.copyAll.onclick = function () {
+      copyText(text, panel.copyAll);
+    };
+    panel.toggleAll.onclick = function () {
+      state.infoView = 'quick';
+      renderQuickInfo(panel, el);
+    };
+  }
+
+  function showInfoPanel() {
+    if (!state.selected) return;
+    if (!state.infoPanel) state.infoPanel = buildInfoPanel();
+    state.infoPanelOpen = true;
+    state.infoView = 'quick';
+    state.infoPanel.root.style.display = 'block';
+    renderQuickInfo(state.infoPanel, state.selected);
+  }
+
+  function hideInfoPanel() {
+    state.infoPanelOpen = false;
+    if (state.infoPanel) state.infoPanel.root.style.display = 'none';
+  }
+
+  function toggleInfoPanel() {
+    if (state.infoPanelOpen) {
+      hideInfoPanel();
+    } else {
+      showInfoPanel();
+    }
+  }
+
+  function updateInfoPanel() {
+    if (!state.infoPanelOpen) return;
+    if (!state.selected) {
+      hideInfoPanel();
+      return;
+    }
+    if (state.infoView === 'all') {
+      renderAllStyles(state.infoPanel, state.selected);
+    } else {
+      renderQuickInfo(state.infoPanel, state.selected);
+    }
   }
 
   function flattenInvertGroups() {
@@ -385,6 +681,7 @@ function nodeNukerToggle() {
     if (state.inverted) exitInvert();
     state.selected = el;
     updateImageState();
+    updateInfoPanel();
     positionBox(state.selectBox, el);
     updateParentBox();
     updateHoverBox();
@@ -407,6 +704,7 @@ function nodeNukerToggle() {
     if (state.selected === el) {
       state.selected = null;
       updateImageState();
+      updateInfoPanel();
       state.selectBox.style.display = 'none';
       state.parentBox.style.display = 'none';
     }
@@ -439,6 +737,7 @@ function nodeNukerToggle() {
     entry.parent.insertBefore(entry.node, entry.nextSibling);
     state.selected = entry.node;
     updateImageState();
+    updateInfoPanel();
     positionBox(state.selectBox, entry.node);
     updateParentBox();
     updateHoverBox();
@@ -452,6 +751,7 @@ function nodeNukerToggle() {
     if (!parent || isOwnUI(parent)) return;
     state.selected = parent;
     updateImageState();
+    updateInfoPanel();
     positionBox(state.selectBox, parent);
     updateParentBox();
     updateHoverBox();
@@ -472,6 +772,7 @@ function nodeNukerToggle() {
     if (!child) return;
     state.selected = child;
     updateImageState();
+    updateInfoPanel();
     positionBox(state.selectBox, child);
     updateParentBox();
     updateHoverBox();
@@ -489,6 +790,7 @@ function nodeNukerToggle() {
     if (!sibling || isOwnUI(sibling)) return;
     state.selected = sibling;
     updateImageState();
+    updateInfoPanel();
     positionBox(state.selectBox, sibling);
     updateParentBox();
     updateHoverBox();

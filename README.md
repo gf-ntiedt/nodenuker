@@ -2,7 +2,7 @@
 
 A tool for interactively picking, deleting, and undoing DOM elements on any page — no dependencies, available as a bookmarklet or a userscript.
 
-Current version: **1.1.2**
+Current version: **1.2.0**
 
 ## Install
 
@@ -63,6 +63,24 @@ These buttons only appear when applicable and disappear again once a non-image e
 ### Copy HTML (`</>`)
 
 Whenever an element is selected, a `</>` / `copy html` button appears in the HUD. Clicking it copies the selected element's full `outerHTML` to the clipboard (via the Clipboard API, with a `document.execCommand('copy')` fallback for contexts where it's unavailable). The button label briefly flashes "copied!" as confirmation.
+
+### Copy text (`Aa`)
+
+Whenever an element is selected, an `Aa` / `copy text` button appears alongside `copy html`. Clicking it copies `element.innerText` — the rendered, visible text only (respects `display:none`/`visibility:hidden`, converts line breaks the way they'd appear on screen) — to the clipboard.
+
+### Element info (`ⓘ`)
+
+Whenever an element is selected, an `ⓘ` / `info` button appears in the HUD. Clicking it opens a separate panel (top-right corner) showing a curated set of computed values for that element, each with its own copy button:
+
+- **ID**, **Class** — shown only when the element actually has one.
+- **Font size** — the actual computed pixel value plus its rem equivalent, calculated against the document's actual root (`<html>`) font size, not a hardcoded 16px.
+- **Font family**, **Font weight**, **Color** — the latter shown alongside its hex equivalent when it can be parsed from the computed `rgb()`/`rgba()` value.
+- **Background** — same rgb()/hex pairing, only shown when the element actually has a non-transparent background color.
+- **Href** — only shown for `<a>` elements that have one.
+
+The panel updates automatically as the selection changes (via click, `p`, `c`, `b`, `n`, or `z`) while it's open, and stays open across those changes until closed with its `×` button. A `Copy all` button copies every visible field at once. A `Show all styles` button switches the panel to a scrollable, monospace dump of every computed CSS property for the element, grouped into three sections: **Set on this element** (declared via inline style or a matching same-origin stylesheet rule), **Inherited** (a standard-CSS-inherited property whose value comes from an ancestor), and **Browser default** (neither of the above). Its own `Copy all styles` button copies the full grouped dump; `← Back` returns to the curated view.
+
+**Limitation:** the "Set on this element" detection can't read cross-origin stylesheets that don't send permissive CORS headers (`stylesheet.cssRules` throws and is silently skipped) — a property declared only in such a stylesheet is misclassified as "Inherited" or "Browser default" instead. `@media`/`@supports` conditions also aren't evaluated, so a property inside a currently-non-matching conditional block is still counted as set.
 
 ## Notes / limitations
 
