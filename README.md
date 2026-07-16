@@ -2,15 +2,15 @@
 
 A tool for interactively picking, deleting, and undoing DOM elements on any page — no dependencies, available as a bookmarklet or a userscript.
 
-Current version: **1.2.2**
+Current version: **1.2.3**
 
 ## Install
 
 Open [`index.html`](index.html) in a browser and pick one of three install methods — all three run the exact same NodeNuker code and behave identically, they only differ in delivery/update mechanism:
 
-1. **Direct bookmarklet** — drag the **🚀 NodeNuker** button to your bookmarks bar. Simplest option, nothing else to install. Downside: every new version needs the button dragged again to replace the old one.
+1. **Userscript** (Violentmonkey / Tampermonkey) — **recommended.** Install a userscript manager first: [Violentmonkey](https://violentmonkey.github.io/) (open source; [Chrome Web Store](https://chrome.google.com/webstore/detail/violent-monkey/jinjaccalgkegednnccohejagnlnfdag), [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/violentmonkey/), [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/eeagobfjdenkkddmbclomhiblgggliao)) or [Tampermonkey](https://www.tampermonkey.net/) (closed source; [App Store](https://apps.apple.com/app/tampermonkey/id6738342400), paid, iOS 15+/macOS 11+; the only one of the two covering all four browsers). Then open [`nodenuker.user.js`](nodenuker.user.js) — the manager offers to install it. Runs on every page, updates itself automatically via `@updateURL`, and is toggled on/off from the manager's toolbar menu (**Toggle NodeNuker**) instead of a bookmarks bar click.
 2. **Loader bookmarklet** — drag the **🚀 NodeNuker (auto-update)** button instead. On every click it injects a `<script>` tag pointing at `https://gf-ntiedt.github.io/nodenuker/nodenuker.js` — the current `nodenuker.js` from this repo's `main` branch, served live via GitHub Pages, with a cache-busting `?t=` timestamp so it's never a stale cached copy. Never needs re-adding. Limitation: blocked on pages whose CSP disallows scripts from `gf-ntiedt.github.io`.
-3. **Userscript** (Violentmonkey / Tampermonkey) — install a userscript manager first: [Violentmonkey](https://violentmonkey.github.io/) (open source; [Chrome Web Store](https://chrome.google.com/webstore/detail/violent-monkey/jinjaccalgkegednnccohejagnlnfdag), [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/violentmonkey/), [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/eeagobfjdenkkddmbclomhiblgggliao)) or [Tampermonkey](https://www.tampermonkey.net/) (closed source; [App Store](https://apps.apple.com/app/tampermonkey/id6738342400), paid, iOS 15+/macOS 11+; the only one of the two covering all four browsers). Then open [`nodenuker.user.js`](nodenuker.user.js) — the manager offers to install it. Runs on every page, updates itself automatically via `@updateURL`, and is toggled on/off from the manager's toolbar menu (**Toggle NodeNuker**) instead of a bookmarks bar click.
+3. **Direct bookmarklet** — drag the **🚀 NodeNuker** button to your bookmarks bar. Simplest option, nothing else to install. Downside: every new version needs the button dragged again to replace the old one.
 
 Chrome hides the bookmarks bar by default. Show it with `Ctrl+Shift+B` (`Cmd+Shift+B` on macOS), or via the menu (⋮ → Bookmarks and lists → Show bookmarks bar), before dragging a bookmarklet button.
 

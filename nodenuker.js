@@ -57,7 +57,7 @@ function nodeNukerToggle() {
   var SHADOW_PANEL = '0 4px 16px rgba(0,0,0,.35)';
   var PTR_AUTO = 'pointer-events:auto;cursor:pointer';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.2.2';
+  var VERSION = '1.2.3';
 
   // Shared cssText fragments for the two fixed floating panels (HUD, info
   // panel): same text color, UI font, corner radius, stacking and shadow —
