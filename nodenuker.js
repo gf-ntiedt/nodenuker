@@ -45,7 +45,7 @@ function nodeNukerToggle() {
   var COLOR_KEEP = '#51cf66';
   var COLOR_PARENT = '#9775fa';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.1.0';
+  var VERSION = '1.1.1';
 
   if (window.__nodeNuker && window.__nodeNuker.active) {
     window.__nodeNuker.deactivate();

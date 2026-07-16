@@ -101,6 +101,10 @@ html = html.replace(
   /(id="bookmarklet-loader-link" href=")[^"]*(")/,
   '$1' + loaderUri.replace(/&/g, '&amp;') + '$2'
 );
+html = html.replace(
+  /(<p class="version">Current version: <strong>)[^<]*(<\/strong><\/p>)/,
+  '$1' + version + '$2'
+);
 fs.writeFileSync(htmlPath, html);
 
 console.log('Version: ' + version);
