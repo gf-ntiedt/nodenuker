@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeNuker
 // @namespace    https://github.com/gf-ntiedt/nodenuker
-// @version      1.2.1
+// @version      1.2.2
 // @description  Point. Click. Nuke. Interactive DOM element picker, deleter & undo tool.
 // @author       Gedankenfolger GmbH
 // @match        *://*/*
@@ -64,8 +64,37 @@ function nodeNukerToggle() {
   var COLOR_DELETE = '#ff6b6b';
   var COLOR_KEEP = '#51cf66';
   var COLOR_PARENT = '#9775fa';
+  var COLOR_TEXT = '#f5f5f5';
+  var COLOR_BTN_BG = '#3a3f4b';
+  var COLOR_BTN_BORDER = '#565d6d';
+  var COLOR_BTN_BORDER_BOTTOM = '#22262e';
+  var FONT_UI = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  var FONT_MONO_11 = '11px/1.4 monospace';
+  var SHADOW_PANEL = '0 4px 16px rgba(0,0,0,.35)';
+  var PTR_AUTO = 'pointer-events:auto;cursor:pointer';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.2.1';
+  var VERSION = '1.2.2';
+
+  // Shared cssText fragments for the two fixed floating panels (HUD, info
+  // panel): same text color, UI font, corner radius, stacking and shadow —
+  // only background, position and inner padding differ between them.
+  function panelChrome(bg) {
+    return [
+      'background:' + bg,
+      'color:' + COLOR_TEXT,
+      'font:12px/1.5 ' + FONT_UI,
+      'border-radius:8px',
+      'z-index:' + Z_INDEX,
+      'box-shadow:' + SHADOW_PANEL
+    ];
+  }
+
+  // Shared cssText string for the small monospace toolbar buttons rendered
+  // via innerHTML (Copy all / Show all styles).
+  function toolbarBtnStyle() {
+    return PTR_AUTO + ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
+      ';border-radius:6px;color:' + COLOR_TEXT + ';padding:4px 8px;font:11px monospace';
+  }
 
   if (window.__nodeNuker && window.__nodeNuker.active) {
     window.__nodeNuker.deactivate();
@@ -321,7 +350,7 @@ function nodeNukerToggle() {
       labelBelow ? 'bottom:-22px' : 'top:-22px', 'left:-2px',
       'background:' + color,
       'color:#fff',
-      'font:11px/1.4 monospace',
+      'font:' + FONT_MONO_11,
       'padding:1px 6px',
       'border-radius:2px',
       'white-space:nowrap'
@@ -374,18 +403,13 @@ function nodeNukerToggle() {
     hud.style.cssText = [
       'position:fixed',
       'bottom:0px', 'left:50%',
-      'transform:translateX(-50%)',
-      'background:rgba(20,20,20,1)',
-      'color:#f5f5f5',
-      'font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'transform:translateX(-50%)'
+    ].concat(panelChrome('rgba(20,20,20,1)')).concat([
       'padding:10px 14px',
-      'border-radius:8px',
-      'z-index:' + Z_INDEX,
-      'box-shadow:0 4px 16px rgba(0,0,0,.35)',
       'max-width:430px',
       'text-align:center',
       'pointer-events:none'
-    ].join(';');
+    ]).join(';');
     hud.innerHTML =
       '<div style="display:none;opacity:.85">Hover: <span data-role="hover">none</span></div>' +
       '<div style="opacity:.85">Selected: <span data-role="selected">none</span></div>' +
@@ -395,7 +419,7 @@ function nodeNukerToggle() {
       '<div data-role="keys" style="display:flex;gap:6px;justify-content:center;flex-wrap:nowrap;margin-top:6px"></div>' +
       '<div data-role="elementActions" style="display:none;gap:6px;justify-content:center;flex-wrap:nowrap;margin-top:6px"></div>' +
       '<div data-role="imageActions" style="display:none;gap:6px;justify-content:center;flex-wrap:nowrap;margin-top:6px"></div>' +
-      '<div style="font-weight:600;margin-top:6px;color:#ff6b6b">NodeNuker v' + VERSION + '</div>';
+      '<div style="font-weight:600;margin-top:6px;color:' + COLOR_DELETE + '">NodeNuker v' + VERSION + '</div>';
     document.documentElement.appendChild(hud);
 
     function makeKeyButton(key, label, title, fn) {
@@ -404,26 +428,25 @@ function nodeNukerToggle() {
       btn.type = 'button';
       btn.title = title;
       btn.style.cssText = [
-        'pointer-events:auto',
-        'cursor:pointer',
+        PTR_AUTO,
         'display:flex',
         'flex-direction:column',
         'align-items:center',
         'gap:2px',
         'min-width:32px',
-        'background:#3a3f4b',
-        'border:1px solid #565d6d',
-        'border-bottom:3px solid #22262e',
+        'background:' + COLOR_BTN_BG,
+        'border:1px solid ' + COLOR_BTN_BORDER,
+        'border-bottom:3px solid ' + COLOR_BTN_BORDER_BOTTOM,
         'border-radius:6px',
         'padding:5px 8px'
       ].join(';');
       var keyEl = document.createElement('span');
-      keyEl.style.cssText = 'font:17px/1 monospace;color:#4dabf7;font-weight:700';
+      keyEl.style.cssText = 'font:17px/1 monospace;color:' + COLOR_HOVER + ';font-weight:700';
       keyEl.textContent = key;
       var divider = document.createElement('span');
-      divider.style.cssText = 'align-self:stretch;height:1px;background:#565d6d';
+      divider.style.cssText = 'align-self:stretch;height:1px;background:' + COLOR_BTN_BORDER;
       var labelEl = document.createElement('span');
-      labelEl.style.cssText = 'font:9px/1 monospace;color:#4dabf7;opacity:.75;text-transform:uppercase;letter-spacing:.03em';
+      labelEl.style.cssText = 'font:9px/1 monospace;color:' + COLOR_HOVER + ';opacity:.75;text-transform:uppercase;letter-spacing:.03em';
       labelEl.textContent = label;
       btn.appendChild(keyEl);
       btn.appendChild(divider);
@@ -490,26 +513,21 @@ function nodeNukerToggle() {
       'top:20px', 'right:20px',
       'width:320px',
       'max-height:70vh',
-      'overflow:auto',
-      'background:rgba(20,20,20,.97)',
-      'color:#f5f5f5',
-      'font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'overflow:auto'
+    ].concat(panelChrome('rgba(20,20,20,.97)')).concat([
       'padding:12px 14px',
-      'border-radius:8px',
-      'z-index:' + Z_INDEX,
-      'box-shadow:0 4px 16px rgba(0,0,0,.35)',
-      'pointer-events:auto',
+      PTR_AUTO,
       'display:none'
-    ].join(';');
+    ]).join(';');
     panel.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">' +
         '<strong data-role="infoTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Element info</strong>' +
-        '<button type="button" data-role="infoClose" title="Close" style="pointer-events:auto;cursor:pointer;background:none;border:0;color:#f5f5f5;font-size:16px;line-height:1;flex:none">×</button>' +
+        '<button type="button" data-role="infoClose" title="Close" style="' + PTR_AUTO + ';background:none;border:0;color:' + COLOR_TEXT + ';font-size:16px;line-height:1;flex:none">×</button>' +
       '</div>' +
       '<div data-role="infoBody"></div>' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
-        '<button type="button" data-role="infoCopyAll" style="pointer-events:auto;cursor:pointer;background:#3a3f4b;border:1px solid #565d6d;border-radius:6px;color:#f5f5f5;padding:4px 8px;font:11px monospace">Copy all</button>' +
-        '<button type="button" data-role="infoToggleAll" style="pointer-events:auto;cursor:pointer;background:#3a3f4b;border:1px solid #565d6d;border-radius:6px;color:#f5f5f5;padding:4px 8px;font:11px monospace">Show all styles</button>' +
+        '<button type="button" data-role="infoCopyAll" style="' + toolbarBtnStyle() + '">Copy all</button>' +
+        '<button type="button" data-role="infoToggleAll" style="' + toolbarBtnStyle() + '">Show all styles</button>' +
       '</div>';
     document.documentElement.appendChild(panel);
     var api = {
@@ -542,7 +560,7 @@ function nodeNukerToggle() {
     copyBtn.type = 'button';
     copyBtn.textContent = '⧉';
     copyBtn.title = 'Copy ' + label;
-    copyBtn.style.cssText = 'pointer-events:auto;cursor:pointer;background:none;border:0;color:#4dabf7;font-size:13px;flex:none;margin-left:6px';
+    copyBtn.style.cssText = PTR_AUTO + ';background:none;border:0;color:' + COLOR_HOVER + ';font-size:13px;flex:none;margin-left:6px';
     copyBtn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -584,7 +602,7 @@ function nodeNukerToggle() {
     var text = getAllStylesText(el);
     panel.body.innerHTML = '';
     var pre = document.createElement('pre');
-    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font:11px/1.4 monospace;margin:0;max-height:45vh;overflow:auto';
+    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font:' + FONT_MONO_11 + ';margin:0;max-height:45vh;overflow:auto';
     pre.textContent = text;
     panel.body.appendChild(pre);
     panel.toggleAll.textContent = '← Back';
