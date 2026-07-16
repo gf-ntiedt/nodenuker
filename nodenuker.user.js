@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeNuker
 // @namespace    https://github.com/gf-ntiedt/nodenuker
-// @version      1.2.0
+// @version      1.2.1
 // @description  Point. Click. Nuke. Interactive DOM element picker, deleter & undo tool.
 // @author       Gedankenfolger GmbH
 // @match        *://*/*
@@ -65,7 +65,7 @@ function nodeNukerToggle() {
   var COLOR_KEEP = '#51cf66';
   var COLOR_PARENT = '#9775fa';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.2.0';
+  var VERSION = '1.2.1';
 
   if (window.__nodeNuker && window.__nodeNuker.active) {
     window.__nodeNuker.deactivate();
@@ -418,12 +418,15 @@ function nodeNukerToggle() {
         'padding:5px 8px'
       ].join(';');
       var keyEl = document.createElement('span');
-      keyEl.style.cssText = 'font:13px/1 monospace;color:#4dabf7;font-weight:700';
+      keyEl.style.cssText = 'font:17px/1 monospace;color:#4dabf7;font-weight:700';
       keyEl.textContent = key;
+      var divider = document.createElement('span');
+      divider.style.cssText = 'align-self:stretch;height:1px;background:#565d6d';
       var labelEl = document.createElement('span');
       labelEl.style.cssText = 'font:9px/1 monospace;color:#4dabf7;opacity:.75;text-transform:uppercase;letter-spacing:.03em';
       labelEl.textContent = label;
       btn.appendChild(keyEl);
+      btn.appendChild(divider);
       btn.appendChild(labelEl);
       btn.addEventListener('click', function (e) {
         e.preventDefault();
