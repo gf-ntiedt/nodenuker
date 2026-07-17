@@ -44,12 +44,15 @@ function nodeNukerToggle() {
   var NS = 'data-nodenuker-ui';
   var Z_INDEX = 2147483647;
   var INVERT_GROUP_THRESHOLD = 6;
-  var COLOR_HOVER = '#4dabf7';
-  var COLOR_DELETE = '#ff6b6b';
+  var COLOR_HOVER = '#c5ba2d';
+  var COLOR_DELETE = '#c5ba2d';
   var COLOR_KEEP = '#51cf66';
   var COLOR_PARENT = '#9775fa';
   var COLOR_TEXT = '#f5f5f5';
-  var COLOR_BTN_BG = '#3a3f4b';
+  var COLOR_BTN_BG = '#555760';
+  var COLOR_KEY_QUIT = '#3a3c44';
+  var COLOR_KEY_NAV = '#5d5f69';
+  var COLOR_KEY_ACTION = '#8a8c96';
   var COLOR_BTN_BORDER = '#565d6d';
   var COLOR_BTN_BORDER_BOTTOM = '#22262e';
   var FONT_UI = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
@@ -57,13 +60,28 @@ function nodeNukerToggle() {
   var SHADOW_PANEL = '0 4px 16px rgba(0,0,0,.35)';
   var PTR_AUTO = 'pointer-events:auto;cursor:pointer';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.2.3';
+  var VERSION = '1.3.0';
+
+  // Small square icon buttons rendered inline in info-panel rows (copy,
+  // style detail, back, close). appearance:none strips the browser's native
+  // button chrome first — without it, some browsers/OS themes enforce a
+  // native minimum button width (seen well over 100px) regardless of the
+  // width set below. Fixed box size + overflow:hidden then keeps them
+  // compact even if a glyph's fallback rendering comes out larger than the
+  // requested font-size.
+  function smallIconBtnStyle(color, fontSize) {
+    return PTR_AUTO + ';appearance:none' +
+      ';box-sizing:border-box;background:none;border:0;color:' + (color || COLOR_HOVER) +
+      ';font-size:' + (fontSize || 13) + 'px;line-height:1;flex:none;width:20px;height:20px;min-width:20px;padding:0' +
+      ';display:inline-flex;align-items:center;justify-content:center;overflow:hidden';
+  }
 
   // Shared cssText fragments for the two fixed floating panels (HUD, info
   // panel): same text color, UI font, corner radius, stacking and shadow —
   // only background, position and inner padding differ between them.
   function panelChrome(bg) {
     return [
+      'box-sizing:border-box',
       'background:' + bg,
       'color:' + COLOR_TEXT,
       'font:12px/1.5 ' + FONT_UI,
@@ -74,9 +92,15 @@ function nodeNukerToggle() {
   }
 
   // Shared cssText string for the small monospace toolbar buttons rendered
-  // via innerHTML (Copy all / Show all styles).
+  // via innerHTML (Copy all / Show all styles). flex-basis:auto sizes each
+  // button to its own label first (so a longer label isn't squeezed into an
+  // equal share while the shorter one sits half-empty); the ellipsis
+  // fallback only kicks in if both together still can't fit, instead of
+  // forcing a horizontal scrollbar on the panel.
   function toolbarBtnStyle() {
-    return PTR_AUTO + ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
+    return PTR_AUTO + ';appearance:none;box-sizing:border-box' +
+      ';flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center' +
+      ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
       ';border-radius:6px;color:' + COLOR_TEXT + ';padding:4px 8px;font:11px monospace';
   }
 
@@ -181,46 +205,31 @@ function nodeNukerToggle() {
     copyText(el.innerText || '', btn ? btn.lastChild : null);
   }
 
-  function rootFontSizePx() {
-    return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  }
-
-  function pxToRemLabel(pxValue) {
-    var px = parseFloat(pxValue);
-    if (isNaN(px)) return pxValue;
-    var rem = Math.round((px / rootFontSizePx()) * 1000) / 1000;
-    return px + 'px (' + rem + 'rem)';
-  }
-
-  function rgbToHex(colorStr) {
-    var m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(colorStr || '');
-    if (!m) return null;
-    var alpha = m[4] !== undefined ? parseFloat(m[4]) : 1;
-    if (alpha === 0) return null;
-    function hex(n) { return ('0' + parseInt(n, 10).toString(16)).slice(-2); }
-    return '#' + hex(m[1]) + hex(m[2]) + hex(m[3]);
-  }
-
-  function colorLabel(colorStr) {
-    var hex = rgbToHex(colorStr);
-    return hex ? (colorStr + ' (' + hex + ')') : colorStr;
-  }
-
-  function getQuickInfo(el) {
-    var cs = getComputedStyle(el);
-    var fields = [];
-    if (el.id) fields.push({ label: 'ID', value: el.id });
-    if (el.className && typeof el.className === 'string' && el.className.trim()) {
-      fields.push({ label: 'Class', value: el.className.trim() });
+  // The actual HTML attributes present on the element (id, class, style,
+  // href, data-*, ...), in source order — as opposed to the computed-style
+  // fields below, which reflect the final rendered result.
+  function getElementAttributes(el) {
+    var attrs = [];
+    for (var i = 0; i < el.attributes.length; i++) {
+      var value = el.attributes[i].value;
+      if (value === '') continue;
+      attrs.push({ label: el.attributes[i].name, value: value });
     }
-    fields.push({ label: 'Font size', value: pxToRemLabel(cs.fontSize) });
-    fields.push({ label: 'Font family', value: cs.fontFamily });
-    fields.push({ label: 'Font weight', value: cs.fontWeight });
-    fields.push({ label: 'Color', value: colorLabel(cs.color) });
-    var bgHex = rgbToHex(cs.backgroundColor);
-    if (bgHex) fields.push({ label: 'Background', value: cs.backgroundColor + ' (' + bgHex + ')' });
-    if (el.tagName === 'A' && el.href) fields.push({ label: 'Href', value: el.href });
-    return fields;
+    return attrs;
+  }
+
+  // The inline style attribute's own declarations, individually — used by
+  // the "style" row's detail view, not the unrelated "Show all styles"
+  // (computed own/inherited/default) view.
+  function getInlineStyleEntries(el) {
+    var entries = [];
+    for (var i = 0; i < el.style.length; i++) {
+      var prop = el.style[i];
+      var value = el.style.getPropertyValue(prop);
+      if (value === '') continue;
+      entries.push({ label: prop, value: value });
+    }
+    return entries;
   }
 
   // Standard CSS "inherited by default" properties (per spec). Used below to
@@ -282,23 +291,38 @@ function nodeNukerToggle() {
     return props;
   }
 
-  function getAllStylesText(el) {
+  // Every computed CSS property for the element, split into the same three
+  // groups as before (own/inherited/default) but as {label, value} entries
+  // instead of pre-joined text lines, so the info panel can render one row
+  // per property (with its own copy button) rather than a monospace dump.
+  function getAllStyleEntries(el) {
     var cs = getComputedStyle(el);
     var own = getOwnDeclaredProps(el);
-    var ownLines = [];
-    var inheritedLines = [];
-    var defaultLines = [];
+    var groups = { own: [], inherited: [], default: [] };
     for (var i = 0; i < cs.length; i++) {
       var prop = cs[i];
-      var line = prop + ': ' + cs.getPropertyValue(prop) + ';';
+      var value = cs.getPropertyValue(prop);
+      if (value === '') continue;
+      var entry = { label: prop, value: value };
       if (own[prop]) {
-        ownLines.push(line);
+        groups.own.push(entry);
       } else if (INHERITED_PROPS[prop]) {
-        inheritedLines.push(line);
+        groups.inherited.push(entry);
       } else {
-        defaultLines.push(line);
+        groups.default.push(entry);
       }
     }
+    return groups;
+  }
+
+  function getAllStylesText(el) {
+    var groups = getAllStyleEntries(el);
+    function toLines(entries) {
+      return entries.map(function (f) { return f.label + ': ' + f.value + ';'; });
+    }
+    var ownLines = toLines(groups.own);
+    var inheritedLines = toLines(groups.inherited);
+    var defaultLines = toLines(groups.default);
     return [
       '/* Set on this element (' + ownLines.length + ') */',
       ownLines.length ? ownLines.join('\n') : '(none)',
@@ -384,6 +408,7 @@ function nodeNukerToggle() {
   function buildHud() {
     var hud = document.createElement('div');
     hud.setAttribute(NS, '1');
+    hud.setAttribute('data-role', 'hud');
     hud.style.cssText = [
       'position:fixed',
       'bottom:0px', 'left:50%',
@@ -400,41 +425,103 @@ function nodeNukerToggle() {
       '<div style="opacity:.85">Parent: <span data-role="parent">none</span></div>' +
       '<div style="opacity:.85">Inverted: <span data-role="invert">off</span></div>' +
       '<div style="margin-top:4px;opacity:.85">Undo stack: <span data-role="stack">0</span></div>' +
-      '<div data-role="keys" style="display:flex;gap:6px;justify-content:center;flex-wrap:nowrap;margin-top:6px"></div>' +
+      '<div data-role="keys"></div>' +
       '<div data-role="elementActions" style="display:none;gap:6px;justify-content:center;flex-wrap:nowrap;margin-top:6px"></div>' +
       '<div data-role="imageActions" style="display:none;gap:6px;justify-content:center;flex-wrap:nowrap;margin-top:6px"></div>' +
       '<div style="font-weight:600;margin-top:6px;color:' + COLOR_DELETE + '">NodeNuker v' + VERSION + '</div>';
     document.documentElement.appendChild(hud);
 
-    function makeKeyButton(key, label, title, fn) {
+    var keycapIdSeq = 0;
+    function keycapSvgMarkup(color) {
+      var uid = 'nnKeycap' + (keycapIdSeq++);
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 192" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;--key-color:' + (color || COLOR_BTN_BG) + '">' +
+        '<defs>' +
+        '<linearGradient id="' + uid + '-sideShade" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" stop-color="#000000" stop-opacity="0.08"/>' +
+        '<stop offset="0.55" stop-color="#000000" stop-opacity="0.14"/>' +
+        '<stop offset="0.82" stop-color="#000000" stop-opacity="0.28"/>' +
+        '<stop offset="1" stop-color="#000000" stop-opacity="0.42"/>' +
+        '</linearGradient>' +
+        '<linearGradient id="' + uid + '-sideLight" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>' +
+        '<stop offset="0.22" stop-color="#ffffff" stop-opacity="0"/>' +
+        '</linearGradient>' +
+        '<radialGradient id="' + uid + '-dish" cx="0.5" cy="0.42" r="0.78">' +
+        '<stop offset="0" stop-color="#000000" stop-opacity="0.07"/>' +
+        '<stop offset="0.65" stop-color="#000000" stop-opacity="0.02"/>' +
+        '<stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>' +
+        '</radialGradient>' +
+        '<linearGradient id="' + uid + '-topSheen" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>' +
+        '<stop offset="0.35" stop-color="#ffffff" stop-opacity="0.06"/>' +
+        '<stop offset="1" stop-color="#ffffff" stop-opacity="0"/>' +
+        '</linearGradient>' +
+        '</defs>' +
+        '<rect x="0" y="0" width="200" height="192" rx="22" fill="var(--key-color,#f4f4f6)"/>' +
+        '<rect x="0" y="0" width="200" height="192" rx="22" fill="url(#' + uid + '-sideShade)"/>' +
+        '<rect x="0" y="0" width="200" height="192" rx="22" fill="url(#' + uid + '-sideLight)"/>' +
+        '<rect x="0.75" y="0.75" width="198.5" height="190.5" rx="21.25" fill="none" stroke="#000000" stroke-opacity="0.12" stroke-width="1.5"/>' +
+        '<rect x="22" y="13" width="156" height="141" rx="15" fill="var(--key-color,#f4f4f6)"/>' +
+        '<rect x="22" y="13" width="156" height="141" rx="15" fill="url(#' + uid + '-dish)"/>' +
+        '<rect x="22" y="13" width="156" height="141" rx="15" fill="url(#' + uid + '-topSheen)"/>' +
+        '<rect x="22" y="13" width="156" height="141" rx="15" fill="none" stroke="#000000" stroke-opacity="0.07" stroke-width="1.2"/>' +
+        '<rect x="23.2" y="14.2" width="153.6" height="138.6" rx="13.8" fill="none" stroke="#ffffff" stroke-opacity="0.65" stroke-width="1.4"/>' +
+        '</svg>';
+    }
+
+    function makeKeyButton(key, label, title, fn, keyColor, compact) {
       var btn = document.createElement('button');
       btn.setAttribute(NS, '1');
       btn.type = 'button';
       btn.title = title;
-      btn.style.cssText = [
-        PTR_AUTO,
-        'display:flex',
-        'flex-direction:column',
-        'align-items:center',
-        'gap:2px',
-        'min-width:32px',
-        'background:' + COLOR_BTN_BG,
-        'border:1px solid ' + COLOR_BTN_BORDER,
-        'border-bottom:3px solid ' + COLOR_BTN_BORDER_BOTTOM,
-        'border-radius:6px',
-        'padding:5px 8px'
-      ].join(';');
+      if (compact) {
+        btn.style.cssText = [
+          PTR_AUTO,
+          'appearance:none',
+          'box-sizing:border-box',
+          'position:relative',
+          'z-index:0',
+          'display:flex',
+          'align-items:center',
+          'justify-content:center',
+          'width:50px',
+          'height:48px',
+          'min-width:0',
+          'min-height:0',
+          'padding:0',
+          'padding-bottom:10%',
+          'background:none',
+          'border:0'
+        ].join(';');
+        btn.insertAdjacentHTML('afterbegin', keycapSvgMarkup(keyColor));
+      } else {
+        btn.style.cssText = [
+          PTR_AUTO,
+          'display:flex',
+          'flex-direction:column',
+          'align-items:center',
+          'gap:2px',
+          'min-width:32px',
+          'background:' + COLOR_BTN_BG,
+          'border:1px solid ' + COLOR_BTN_BORDER,
+          'border-bottom:3px solid ' + COLOR_BTN_BORDER_BOTTOM,
+          'border-radius:6px',
+          'padding:5px 8px'
+        ].join(';');
+      }
       var keyEl = document.createElement('span');
-      keyEl.style.cssText = 'font:17px/1 monospace;color:' + COLOR_HOVER + ';font-weight:700';
+      keyEl.style.cssText = 'font:' + (compact ? 20 : 17) + 'px/1 monospace;color:' + COLOR_HOVER + ';font-weight:700';
       keyEl.textContent = key;
-      var divider = document.createElement('span');
-      divider.style.cssText = 'align-self:stretch;height:1px;background:' + COLOR_BTN_BORDER;
-      var labelEl = document.createElement('span');
-      labelEl.style.cssText = 'font:9px/1 monospace;color:' + COLOR_HOVER + ';opacity:.75;text-transform:uppercase;letter-spacing:.03em';
-      labelEl.textContent = label;
       btn.appendChild(keyEl);
-      btn.appendChild(divider);
-      btn.appendChild(labelEl);
+      if (!compact) {
+        var divider = document.createElement('span');
+        divider.style.cssText = 'align-self:stretch;height:1px;background:' + COLOR_BTN_BORDER;
+        var labelEl = document.createElement('span');
+        labelEl.style.cssText = 'font:9px/1 monospace;color:' + COLOR_HOVER + ';opacity:.75;text-transform:uppercase;letter-spacing:.03em';
+        labelEl.textContent = label;
+        btn.appendChild(divider);
+        btn.appendChild(labelEl);
+      }
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -444,18 +531,22 @@ function nodeNukerToggle() {
     }
 
     var KEYS = [
-      { key: 'Esc', label: 'quit', title: 'Quit: exit NodeNuker completely', fn: deactivate },
-      { key: 'Del', label: 'delete', title: 'Delete: remove the hovered/selected element', fn: deleteTarget },
-      { key: 'z', label: 'undo', title: 'Undo: restore the last removed element', fn: undo },
-      { key: 'p', label: 'parent', title: 'Parent: select the parent of the selected element', fn: selectParent },
-      { key: 'c', label: 'child', title: 'Child: select the first child of the selected element', fn: selectChild },
-      { key: 'b', label: 'back', title: 'Back: select the previous sibling', fn: function () { selectSibling('prev'); } },
-      { key: 'n', label: 'next', title: 'Next: select the next sibling', fn: function () { selectSibling('next'); } },
-      { key: 'i', label: 'invert', title: 'Invert: mark everything except the selected element and its ancestors for removal', fn: toggleInvert }
+      { key: 'Esc', label: 'quit', title: 'Quit: exit NodeNuker completely', fn: deactivate, row: 1, col: 1, color: COLOR_KEY_QUIT },
+      { key: 'p', label: 'parent', title: 'Parent: select the parent of the selected element', fn: selectParent, row: 1, col: 3, color: COLOR_KEY_NAV },
+      { key: 'Del', label: 'delete', title: 'Delete: remove the hovered/selected element', fn: deleteTarget, row: 1, col: 5, color: COLOR_KEY_ACTION },
+      { key: 'b', label: 'back', title: 'Back: select the previous sibling', fn: function () { selectSibling('prev'); }, row: 2, col: 2, color: COLOR_KEY_NAV },
+      { key: 'n', label: 'next', title: 'Next: select the next sibling', fn: function () { selectSibling('next'); }, row: 2, col: 4, color: COLOR_KEY_NAV },
+      { key: 'i', label: 'invert', title: 'Invert: mark everything except the selected element and its ancestors for removal', fn: toggleInvert, row: 2, col: 5, color: COLOR_KEY_ACTION },
+      { key: 'c', label: 'child', title: 'Child: select the first child of the selected element', fn: selectChild, row: 3, col: 3, color: COLOR_KEY_NAV },
+      { key: 'z', label: 'undo', title: 'Undo: restore the last removed element', fn: undo, row: 3, col: 5, color: COLOR_KEY_ACTION }
     ];
     var keysRow = hud.querySelector('[data-role="keys"]');
+    keysRow.style.cssText = 'display:grid;grid-template-columns:repeat(5,auto);grid-template-rows:repeat(3,auto);gap:2px;justify-content:center;margin-top:6px';
     KEYS.forEach(function (k) {
-      keysRow.appendChild(makeKeyButton(k.key, k.label, k.title, k.fn));
+      var btn = makeKeyButton(k.key, k.label, k.title, k.fn, k.color, true);
+      btn.style.gridRow = k.row;
+      btn.style.gridColumn = k.col;
+      keysRow.appendChild(btn);
     });
 
     var ELEMENT_ACTIONS = [
@@ -492,6 +583,7 @@ function nodeNukerToggle() {
   function buildInfoPanel() {
     var panel = document.createElement('div');
     panel.setAttribute(NS, '1');
+    panel.setAttribute('data-role', 'infoPanel');
     panel.style.cssText = [
       'position:fixed',
       'top:20px', 'right:20px',
@@ -505,8 +597,9 @@ function nodeNukerToggle() {
     ]).join(';');
     panel.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">' +
-        '<strong data-role="infoTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Element info</strong>' +
-        '<button type="button" data-role="infoClose" title="Close" style="' + PTR_AUTO + ';background:none;border:0;color:' + COLOR_TEXT + ';font-size:16px;line-height:1;flex:none">×</button>' +
+        '<button type="button" data-role="infoBack" title="Back" style="' + smallIconBtnStyle() + ';display:none">←</button>' +
+        '<strong data-role="infoTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">Element info</strong>' +
+        '<button type="button" data-role="infoClose" title="Close" style="' + smallIconBtnStyle(COLOR_TEXT, 16) + '">×</button>' +
       '</div>' +
       '<div data-role="infoBody"></div>' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
@@ -516,6 +609,7 @@ function nodeNukerToggle() {
     document.documentElement.appendChild(panel);
     var api = {
       root: panel,
+      back: panel.querySelector('[data-role="infoBack"]'),
       title: panel.querySelector('[data-role="infoTitle"]'),
       close: panel.querySelector('[data-role="infoClose"]'),
       body: panel.querySelector('[data-role="infoBody"]'),
@@ -530,12 +624,13 @@ function nodeNukerToggle() {
     return api;
   }
 
-  function renderInfoRow(container, label, value) {
+  function renderInfoRow(container, label, value, extraBtn) {
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:3px 0;border-bottom:1px solid #333';
     var labelEl = document.createElement('span');
-    labelEl.style.cssText = 'opacity:.7;white-space:nowrap;flex:none';
+    labelEl.style.cssText = 'opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;max-width:50%';
     labelEl.textContent = label;
+    labelEl.title = label;
     var valueEl = document.createElement('span');
     valueEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:right';
     valueEl.textContent = value;
@@ -544,7 +639,7 @@ function nodeNukerToggle() {
     copyBtn.type = 'button';
     copyBtn.textContent = '⧉';
     copyBtn.title = 'Copy ' + label;
-    copyBtn.style.cssText = PTR_AUTO + ';background:none;border:0;color:' + COLOR_HOVER + ';font-size:13px;flex:none;margin-left:6px';
+    copyBtn.style.cssText = smallIconBtnStyle() + ';margin-left:6px';
     copyBtn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -553,21 +648,53 @@ function nodeNukerToggle() {
     row.appendChild(labelEl);
     row.appendChild(valueEl);
     row.appendChild(copyBtn);
+    if (extraBtn) row.appendChild(extraBtn);
     container.appendChild(row);
+  }
+
+  // Small inline button rendered next to the "style" attribute row, opening
+  // a per-declaration breakdown of just that attribute (not the unrelated
+  // "Show all styles" computed own/inherited/default view).
+  function makeStyleDetailButton(panel, el) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '⋯';
+    btn.title = 'Show inline style declarations individually';
+    btn.style.cssText = smallIconBtnStyle() + ';margin-left:6px';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      state.infoView = 'style';
+      renderStyleDetail(panel, el);
+    });
+    return btn;
+  }
+
+  // Shared "go back to the main attribute list" action, wired to both the
+  // top infoBack button and the bottom toggleAll button (labeled "← Back")
+  // whenever a sub-view (style detail, all styles) is showing.
+  function backToQuickInfo(panel, el) {
+    return function () {
+      state.infoView = 'quick';
+      renderQuickInfo(panel, el);
+    };
   }
 
   function renderQuickInfo(panel, el) {
     panel.title.textContent = 'Info: ' + describe(el);
+    panel.back.style.display = 'none';
+    panel.body.setAttribute('data-view', 'quick');
     panel.body.innerHTML = '';
-    var fields = getQuickInfo(el);
+    var fields = getElementAttributes(el);
     if (!fields.length) {
       var empty = document.createElement('div');
       empty.style.opacity = '.7';
-      empty.textContent = 'No notable styles found.';
+      empty.textContent = '(no attributes)';
       panel.body.appendChild(empty);
     } else {
       fields.forEach(function (f) {
-        renderInfoRow(panel.body, f.label, f.value);
+        var extra = f.label === 'style' ? makeStyleDetailButton(panel, el) : null;
+        renderInfoRow(panel.body, f.label, f.value, extra);
       });
     }
     panel.toggleAll.textContent = 'Show all styles';
@@ -581,22 +708,84 @@ function nodeNukerToggle() {
     };
   }
 
-  function renderAllStyles(panel, el) {
-    panel.title.textContent = 'All styles: ' + describe(el);
-    var text = getAllStylesText(el);
+  function renderStyleDetail(panel, el) {
+    panel.title.textContent = 'Inline style: ' + describe(el);
+    panel.back.style.display = '';
+    panel.back.onclick = backToQuickInfo(panel, el);
+    panel.body.setAttribute('data-view', 'style');
     panel.body.innerHTML = '';
-    var pre = document.createElement('pre');
-    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font:' + FONT_MONO_11 + ';margin:0;max-height:45vh;overflow:auto';
-    pre.textContent = text;
-    panel.body.appendChild(pre);
+    var entries = getInlineStyleEntries(el);
+    if (!entries.length) {
+      var empty = document.createElement('div');
+      empty.style.opacity = '.7';
+      empty.textContent = '(no inline style declarations)';
+      panel.body.appendChild(empty);
+    } else {
+      entries.forEach(function (f) {
+        renderInfoRow(panel.body, f.label, f.value);
+      });
+    }
     panel.toggleAll.textContent = '← Back';
     panel.copyAll.onclick = function () {
+      var text = entries.map(function (f) { return f.label + ': ' + f.value + ';'; }).join('\n');
       copyText(text, panel.copyAll);
     };
-    panel.toggleAll.onclick = function () {
-      state.infoView = 'quick';
-      renderQuickInfo(panel, el);
+    panel.toggleAll.onclick = backToQuickInfo(panel, el);
+  }
+
+  function renderStyleGroup(container, title, entries) {
+    var header = document.createElement('div');
+    header.style.cssText = 'opacity:.55;text-transform:uppercase;letter-spacing:.04em;font-size:10px;font-weight:700;margin:10px 0 2px';
+    header.textContent = title + ' (' + entries.length + ')';
+    container.appendChild(header);
+    if (!entries.length) {
+      var empty = document.createElement('div');
+      empty.style.opacity = '.7';
+      empty.textContent = '(none)';
+      container.appendChild(empty);
+    } else {
+      entries.forEach(function (f) { renderInfoRow(container, f.label, f.value); });
+    }
+  }
+
+  function renderAllStyles(panel, el) {
+    panel.title.textContent = 'All styles: ' + describe(el);
+    panel.back.style.display = '';
+    panel.back.onclick = backToQuickInfo(panel, el);
+    panel.body.setAttribute('data-view', 'all');
+    var groups = getAllStyleEntries(el);
+    panel.body.innerHTML = '';
+
+    var search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Filter styles…';
+    search.style.cssText = PTR_AUTO + ';display:block;width:100%;box-sizing:border-box' +
+      ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
+      ';border-radius:6px;color:' + COLOR_TEXT + ';padding:4px 8px;font:11px monospace;margin-bottom:8px';
+    panel.body.appendChild(search);
+
+    var list = document.createElement('div');
+    panel.body.appendChild(list);
+
+    function renderFiltered() {
+      var q = search.value.trim().toLowerCase();
+      function matching(entries) {
+        if (!q) return entries;
+        return entries.filter(function (f) { return f.label.toLowerCase().indexOf(q) !== -1; });
+      }
+      list.innerHTML = '';
+      renderStyleGroup(list, 'Set on this element', matching(groups.own));
+      renderStyleGroup(list, 'Inherited', matching(groups.inherited));
+      renderStyleGroup(list, 'Browser default', matching(groups.default));
+    }
+    search.addEventListener('input', renderFiltered);
+    renderFiltered();
+
+    panel.toggleAll.textContent = '← Back';
+    panel.copyAll.onclick = function () {
+      copyText(getAllStylesText(el), panel.copyAll);
     };
+    panel.toggleAll.onclick = backToQuickInfo(panel, el);
   }
 
   function showInfoPanel() {
@@ -629,6 +818,8 @@ function nodeNukerToggle() {
     }
     if (state.infoView === 'all') {
       renderAllStyles(state.infoPanel, state.selected);
+    } else if (state.infoView === 'style') {
+      renderStyleDetail(state.infoPanel, state.selected);
     } else {
       renderQuickInfo(state.infoPanel, state.selected);
     }
@@ -900,6 +1091,7 @@ function nodeNukerToggle() {
   }
 
   function onKeyDown(e) {
+    if (isOwnUI(e.target)) return;
     var key = e.key;
     if (key === 'Escape') {
       e.preventDefault();

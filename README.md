@@ -2,7 +2,7 @@
 
 A tool for interactively picking, deleting, and undoing DOM elements on any page — no dependencies, available as a bookmarklet or a userscript.
 
-Current version: **1.2.3**
+Current version: **1.3.0**
 
 ## Install
 
@@ -19,18 +19,18 @@ Chrome hides the bookmarks bar by default. Show it with `Ctrl+Shift+B` (`Cmd+Shi
 1. Click the bookmarklet on any page to activate it (or use the userscript manager's **Toggle NodeNuker** menu command).
 2. Hover over elements — the one under the cursor is outlined in blue.
 3. Click an element to select it (outlined in red). Its direct parent is shown with a dashed purple outline — a preview of what `p` would select next.
-4. The HUD at the bottom of the page shows keyboard-key-styled buttons for every command — click one directly instead of pressing the key, if you prefer. Hover over any button for a fuller description (native tooltip).
+4. The HUD at the bottom of the page shows keyboard-key-styled buttons for every command, arranged like a small keypad — click one directly instead of pressing the key, if you prefer. Each button shows only the key itself; hover over it for a fuller description (native tooltip).
 
-| Key | Button label | Action |
-|---|---|---|
-| `Delete` / `Backspace` | `Del` / delete | Remove the element currently under the cursor (falls back to the clicked/selected element if the cursor isn't over anything trackable, or removes the whole inverted selection if invert mode is active). Kept on an undo stack. |
-| `z` | `z` / undo | Undo the last removal |
-| `p` | `p` / parent | Select the parent of the currently selected element (recomputes the inverted selection if invert mode is active) |
-| `c` | `c` / child | Select the first child of the currently selected element, if one exists |
-| `b` | `b` / back | Select the previous sibling of the currently selected element, if one exists |
-| `n` | `n` / next | Select the next sibling of the currently selected element, if one exists |
-| `i` | `i` / invert | Invert the selection (see below); press again to leave invert mode |
-| `Esc` | `Esc` / quit | Exit NodeNuker completely (removes all listeners and UI) |
+| Key | Action |
+|---|---|
+| `Delete` / `Backspace` | Remove the element currently under the cursor (falls back to the clicked/selected element if the cursor isn't over anything trackable, or removes the whole inverted selection if invert mode is active). Kept on an undo stack. |
+| `z` | Undo the last removal |
+| `p` | Select the parent of the currently selected element (recomputes the inverted selection if invert mode is active) |
+| `c` | Select the first child of the currently selected element, if one exists |
+| `b` | Select the previous sibling of the currently selected element, if one exists |
+| `n` | Select the next sibling of the currently selected element, if one exists |
+| `i` | Invert the selection (see below); press again to leave invert mode |
+| `Esc` | Exit NodeNuker completely (removes all listeners and UI) |
 
 You don't need to click first — hovering over an element and pressing `Delete` removes it directly. Click is needed for `p`/`c`/`b`/`n` (parent/child/sibling navigation) and `i` (invert), which all operate on the clicked/selected element.
 
@@ -70,15 +70,13 @@ Whenever an element is selected, an `Aa` / `copy text` button appears alongside 
 
 ### Element info (`ⓘ`)
 
-Whenever an element is selected, an `ⓘ` / `info` button appears in the HUD. Clicking it opens a separate panel (top-right corner) showing a curated set of computed values for that element, each with its own copy button:
+Whenever an element is selected, an `ⓘ` / `info` button appears in the HUD. Clicking it opens a separate panel (top-right corner) showing every HTML attribute the element actually has (`id`, `class`, `style`, `href`, `data-*`, ...), in source order — not a fixed, curated subset, and not mixed in with computed style values. Each attribute is its own row with a copy button.
 
-- **ID**, **Class** — shown only when the element actually has one.
-- **Font size** — the actual computed pixel value plus its rem equivalent, calculated against the document's actual root (`<html>`) font size, not a hardcoded 16px.
-- **Font family**, **Font weight**, **Color** — the latter shown alongside its hex equivalent when it can be parsed from the computed `rgb()`/`rgba()` value.
-- **Background** — same rgb()/hex pairing, only shown when the element actually has a non-transparent background color.
-- **Href** — only shown for `<a>` elements that have one.
+Only attributes/properties that actually have a value are listed — e.g. a boolean attribute present without a value, or a computed style property that resolves to an empty string, is left out rather than shown as a blank row.
 
-The panel updates automatically as the selection changes (via click, `p`, `c`, `b`, `n`, or `z`) while it's open, and stays open across those changes until closed with its `×` button. A `Copy all` button copies every visible field at once. A `Show all styles` button switches the panel to a scrollable, monospace dump of every computed CSS property for the element, grouped into three sections: **Set on this element** (declared via inline style or a matching same-origin stylesheet rule), **Inherited** (a standard-CSS-inherited property whose value comes from an ancestor), and **Browser default** (neither of the above). Its own `Copy all styles` button copies the full grouped dump; `← Back` returns to the curated view.
+If the element has a `style` attribute, its row gets an extra `⋯` button that opens a per-declaration breakdown of just that attribute (one row per CSS property, each individually copyable) — separate from, and not to be confused with, the `Show all styles` view described below. `← Back` returns from it to the main info view.
+
+The panel updates automatically as the selection changes (via click, `p`, `c`, `b`, `n`, or `z`) while it's open, and stays open across those changes until closed with its `×` button. A `Copy all` button copies every visible attribute at once. A `Show all styles` button switches the panel to every computed CSS property for the element, one row per property with its own copy button, grouped into three sections: **Set on this element** (declared via inline style or a matching same-origin stylesheet rule), **Inherited** (a standard-CSS-inherited property whose value comes from an ancestor), and **Browser default** (neither of the above). A filter field above the list narrows it down to properties whose name contains the typed text. Its own `Copy all styles` button copies the full grouped list as text. Both the `⋯` detail view and `Show all styles` view show a `← Back` button at the top of the panel (next to the title) in addition to the one at the bottom, so it's reachable without scrolling through a long list.
 
 **Limitation:** the "Set on this element" detection can't read cross-origin stylesheets that don't send permissive CORS headers (`stylesheet.cssRules` throws and is silently skipped) — a property declared only in such a stylesheet is misclassified as "Inherited" or "Browser default" instead. `@media`/`@supports` conditions also aren't evaluated, so a property inside a currently-non-matching conditional block is still counted as set.
 
