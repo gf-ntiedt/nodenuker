@@ -2,7 +2,7 @@
 
 A tool for interactively picking, deleting, and undoing DOM elements on any page — no dependencies, available as a bookmarklet or a userscript.
 
-Current version: **1.3.0**
+Current version: **1.3.1**
 
 ## Install
 

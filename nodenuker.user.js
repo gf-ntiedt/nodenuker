@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeNuker
 // @namespace    https://github.com/gf-ntiedt/nodenuker
-// @version      1.3.0
+// @version      1.3.1
 // @description  Point. Click. Nuke. Interactive DOM element picker, deleter & undo tool.
 // @author       Gedankenfolger GmbH
 // @match        *://*/*
@@ -76,7 +76,7 @@ function nodeNukerToggle() {
   var SHADOW_PANEL = '0 4px 16px rgba(0,0,0,.35)';
   var PTR_AUTO = 'pointer-events:auto;cursor:pointer';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.3.0';
+  var VERSION = '1.3.1';
 
   // Small square icon buttons rendered inline in info-panel rows (copy,
   // style detail, back, close). appearance:none strips the browser's native
