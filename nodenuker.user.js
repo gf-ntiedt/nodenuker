@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeNuker
 // @namespace    https://github.com/gf-ntiedt/nodenuker
-// @version      1.3.1
+// @version      1.4.0
 // @description  Point. Click. Nuke. Interactive DOM element picker, deleter & undo tool.
 // @author       Gedankenfolger GmbH
 // @match        *://*/*
@@ -76,7 +76,29 @@ function nodeNukerToggle() {
   var SHADOW_PANEL = '0 4px 16px rgba(0,0,0,.35)';
   var PTR_AUTO = 'pointer-events:auto;cursor:pointer';
   var SAFE_URL_SCHEME = /^(https?|data|blob):/i;
-  var VERSION = '1.3.1';
+  var VERSION = '1.4.0';
+  var SETTINGS_KEY = 'nodenuker:settings';
+  var DEFAULT_SETTINGS = { autoOpenInfoPanel: false };
+
+  // Settings persist across sessions via localStorage (per host origin), so
+  // wrapped in try/catch: some pages block storage access entirely (strict
+  // sandboxed iframes, certain privacy modes), which must not crash NodeNuker.
+  function loadSettings() {
+    var settings = {};
+    for (var key in DEFAULT_SETTINGS) settings[key] = DEFAULT_SETTINGS[key];
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        for (var k in parsed) settings[k] = parsed[k];
+      }
+    } catch (e) {}
+    return settings;
+  }
+
+  function saveSettings(settings) {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
 
   // Small square icon buttons rendered inline in info-panel rows (copy,
   // style detail, back, close). appearance:none strips the browser's native
@@ -141,7 +163,14 @@ function nodeNukerToggle() {
     imageUrl: null,
     infoPanel: null,
     infoPanelOpen: false,
-    infoView: 'quick'
+    infoView: 'quick',
+    settings: loadSettings(),
+    settingsToolbar: null,
+    settingsPanel: null,
+    settingsPanelOpen: false,
+    converterPanel: null,
+    converterPanelOpen: false,
+    autoOpenedInfoPanel: false
   };
 
   function getImageUrl(el) {
@@ -425,6 +454,7 @@ function nodeNukerToggle() {
     var hud = document.createElement('div');
     hud.setAttribute(NS, '1');
     hud.setAttribute('data-role', 'hud');
+    hud.tabIndex = -1;
     hud.style.cssText = [
       'position:fixed',
       'bottom:0px', 'left:50%',
@@ -548,13 +578,13 @@ function nodeNukerToggle() {
 
     var KEYS = [
       { key: 'Esc', label: 'quit', title: 'Quit: exit NodeNuker completely', fn: deactivate, row: 1, col: 1, color: COLOR_KEY_QUIT },
-      { key: 'p', label: 'parent', title: 'Parent: select the parent of the selected element', fn: selectParent, row: 1, col: 3, color: COLOR_KEY_NAV },
+      { key: 'P', label: 'parent', title: 'Parent: select the parent of the selected element', fn: selectParent, row: 1, col: 3, color: COLOR_KEY_NAV },
       { key: 'Del', label: 'delete', title: 'Delete: remove the hovered/selected element', fn: deleteTarget, row: 1, col: 5, color: COLOR_KEY_ACTION },
-      { key: 'b', label: 'back', title: 'Back: select the previous sibling', fn: function () { selectSibling('prev'); }, row: 2, col: 2, color: COLOR_KEY_NAV },
-      { key: 'n', label: 'next', title: 'Next: select the next sibling', fn: function () { selectSibling('next'); }, row: 2, col: 4, color: COLOR_KEY_NAV },
-      { key: 'i', label: 'invert', title: 'Invert: mark everything except the selected element and its ancestors for removal', fn: toggleInvert, row: 2, col: 5, color: COLOR_KEY_ACTION },
-      { key: 'c', label: 'child', title: 'Child: select the first child of the selected element', fn: selectChild, row: 3, col: 3, color: COLOR_KEY_NAV },
-      { key: 'z', label: 'undo', title: 'Undo: restore the last removed element', fn: undo, row: 3, col: 5, color: COLOR_KEY_ACTION }
+      { key: 'B', label: 'back', title: 'Back: select the previous sibling', fn: function () { selectSibling('prev'); }, row: 2, col: 2, color: COLOR_KEY_NAV },
+      { key: 'N', label: 'next', title: 'Next: select the next sibling', fn: function () { selectSibling('next'); }, row: 2, col: 4, color: COLOR_KEY_NAV },
+      { key: 'I', label: 'invert', title: 'Invert: mark everything except the selected element and its ancestors for removal', fn: toggleInvert, row: 2, col: 5, color: COLOR_KEY_ACTION },
+      { key: 'C', label: 'child', title: 'Child: select the first child of the selected element', fn: selectChild, row: 3, col: 3, color: COLOR_KEY_NAV },
+      { key: 'Z', label: 'undo', title: 'Undo: restore the last removed element', fn: undo, row: 3, col: 5, color: COLOR_KEY_ACTION }
     ];
     var keysRow = hud.querySelector('[data-role="keys"]');
     keysRow.style.cssText = 'display:grid;grid-template-columns:repeat(5,auto);grid-template-rows:repeat(3,auto);gap:2px;justify-content:center;margin-top:6px';
@@ -608,7 +638,7 @@ function nodeNukerToggle() {
       'overflow:auto'
     ].concat(panelChrome('rgba(20,20,20,.97)')).concat([
       'padding:12px 14px',
-      PTR_AUTO,
+      'pointer-events:auto',
       'display:none'
     ]).join(';');
     panel.innerHTML =
@@ -640,7 +670,301 @@ function nodeNukerToggle() {
     return api;
   }
 
-  function renderInfoRow(container, label, value, extraBtn) {
+  // Fixed top-left toolbar, mirroring the HUD's pattern of a
+  // pointer-events:none wrapper with pointer-events:auto buttons inside —
+  // one button per row: Settings and the standalone unit converter are two
+  // separate, equally-ranked entry points, each opening its own panel.
+  function buildSettingsToolbar() {
+    var toolbar = document.createElement('div');
+    toolbar.setAttribute(NS, '1');
+    toolbar.setAttribute('data-role', 'settingsToolbar');
+    toolbar.style.cssText = [
+      'position:fixed', 'top:20px', 'left:0',
+      'display:flex', 'flex-direction:column', 'gap:6px',
+      'z-index:' + Z_INDEX,
+      'pointer-events:none'
+    ].join(';');
+    document.documentElement.appendChild(toolbar);
+
+    function makeToolbarButton(glyph, title, onClick) {
+      var btn = document.createElement('button');
+      btn.setAttribute(NS, '1');
+      btn.type = 'button';
+      btn.title = title;
+      btn.style.cssText = [
+        PTR_AUTO,
+        'appearance:none',
+        'box-sizing:border-box',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'flex:none',
+        'width:36px',
+        'height:36px',
+        'min-width:0',
+        'min-height:0',
+        'font-size:16px',
+        'background:' + COLOR_BTN_BG,
+        'border:1px solid ' + COLOR_BTN_BORDER,
+        'border-bottom:3px solid ' + COLOR_BTN_BORDER_BOTTOM,
+        'border-radius:6px',
+        'color:' + COLOR_TEXT
+      ].join(';');
+      btn.textContent = glyph;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      });
+      return btn;
+    }
+
+    toolbar.appendChild(makeToolbarButton('⚙', 'Settings', toggleSettingsPanel));
+    toolbar.appendChild(makeToolbarButton('⇄', 'Unit converter', toggleConverterPanel));
+
+    return { root: toolbar };
+  }
+
+  function buildSettingsPanel() {
+    var panel = document.createElement('div');
+    panel.setAttribute(NS, '1');
+    panel.setAttribute('data-role', 'settingsPanel');
+    panel.style.cssText = [
+      'position:fixed',
+      'top:20px', 'left:50px',
+      'width:280px',
+      'max-height:70vh',
+      'overflow:auto'
+    ].concat(panelChrome('rgba(20,20,20,.97)')).concat([
+      'padding:12px 14px',
+      'pointer-events:auto',
+      'display:none'
+    ]).join(';');
+    panel.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">' +
+        '<strong style="flex:1">Settings</strong>' +
+        '<button type="button" data-role="settingsClose" title="Close" style="' + smallIconBtnStyle(COLOR_TEXT, 16) + '">×</button>' +
+      '</div>' +
+      '<label style="display:flex;align-items:center;gap:6px;cursor:pointer">' +
+        '<input type="checkbox" data-role="autoOpenInfo">' +
+        '<span>Open info panel automatically on first selection</span>' +
+      '</label>';
+    document.documentElement.appendChild(panel);
+
+    var api = {
+      root: panel,
+      close: panel.querySelector('[data-role="settingsClose"]'),
+      autoOpenCheckbox: panel.querySelector('[data-role="autoOpenInfo"]')
+    };
+    api.close.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideSettingsPanel();
+    });
+    api.autoOpenCheckbox.checked = !!state.settings.autoOpenInfoPanel;
+    api.autoOpenCheckbox.addEventListener('change', function () {
+      state.settings.autoOpenInfoPanel = api.autoOpenCheckbox.checked;
+      saveSettings(state.settings);
+    });
+    return api;
+  }
+
+  function showSettingsPanel() {
+    if (!state.settingsPanel) state.settingsPanel = buildSettingsPanel();
+    state.settingsPanelOpen = true;
+    state.settingsPanel.root.style.display = 'block';
+  }
+
+  function hideSettingsPanel() {
+    state.settingsPanelOpen = false;
+    if (state.settingsPanel) state.settingsPanel.root.style.display = 'none';
+  }
+
+  function toggleSettingsPanel() {
+    if (state.settingsPanelOpen) {
+      hideSettingsPanel();
+    } else {
+      showSettingsPanel();
+    }
+  }
+
+  // Standalone unit converter: independent of any selected element, reusing
+  // the same getValueConversions() logic as the click-to-convert feature in
+  // "Show all styles".
+  function buildConverterPanel() {
+    var panel = document.createElement('div');
+    panel.setAttribute(NS, '1');
+    panel.setAttribute('data-role', 'converterPanel');
+    panel.style.cssText = [
+      'position:fixed',
+      'top:20px', 'left:340px',
+      'width:280px',
+      'max-height:70vh',
+      'overflow:auto'
+    ].concat(panelChrome('rgba(20,20,20,.97)')).concat([
+      'padding:12px 14px',
+      'pointer-events:auto',
+      'display:none'
+    ]).join(';');
+    panel.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">' +
+        '<strong style="flex:1">Unit converter</strong>' +
+        '<button type="button" data-role="converterClose" title="Close" style="' + smallIconBtnStyle(COLOR_TEXT, 16) + '">×</button>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">' +
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;opacity:.85">' +
+          '<span style="white-space:nowrap">Root font-size</span>' +
+          '<input type="number" data-role="converterRoot" min="1" step="0.1" style="width:60px;box-sizing:border-box' +
+            ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
+            ';border-radius:6px;color:' + COLOR_TEXT + ';padding:4px 6px;font:11px monospace">' +
+          '<span>px</span>' +
+        '</label>' +
+        '<button type="button" data-role="converterRootReset" title="Reset to current page root font-size" style="' + smallIconBtnStyle() + '">↻</button>' +
+      '</div>' +
+      '<input type="text" data-role="converterInput" placeholder="e.g. 16px, rgb(0,0,0), #fff" style="display:block;width:100%;box-sizing:border-box' +
+        ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
+        ';border-radius:6px;color:' + COLOR_TEXT + ';padding:4px 8px;font:11px monospace;margin-bottom:8px">' +
+      '<div data-role="converterResult"></div>';
+    document.documentElement.appendChild(panel);
+
+    var api = {
+      root: panel,
+      close: panel.querySelector('[data-role="converterClose"]'),
+      input: panel.querySelector('[data-role="converterInput"]'),
+      result: panel.querySelector('[data-role="converterResult"]'),
+      rootInput: panel.querySelector('[data-role="converterRoot"]'),
+      rootReset: panel.querySelector('[data-role="converterRootReset"]')
+    };
+    api.rootInput.value = getRootFontSizePx() || 16;
+
+    function recompute() {
+      var value = api.input.value;
+      api.result.innerHTML = '';
+      if (!value) return;
+      var rootPx = parseFloat(api.rootInput.value);
+      if (!(rootPx > 0)) rootPx = null;
+      var conversions = isConvertibleValue(value) ? getValueConversions(value, rootPx) : null;
+      if (!conversions || !conversions.length) {
+        var msg = document.createElement('div');
+        msg.style.cssText = 'opacity:.6;padding:3px 0';
+        msg.textContent = 'No conversion available';
+        api.result.appendChild(msg);
+        return;
+      }
+      conversions.forEach(function (cv) {
+        renderInfoRow(api.result, cv.label, cv.value);
+      });
+    }
+
+    api.close.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideConverterPanel();
+    });
+    api.input.addEventListener('input', recompute);
+    api.rootInput.addEventListener('input', recompute);
+    api.rootReset.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      api.rootInput.value = getRootFontSizePx() || 16;
+      recompute();
+    });
+    return api;
+  }
+
+  function showConverterPanel() {
+    if (!state.converterPanel) state.converterPanel = buildConverterPanel();
+    state.converterPanelOpen = true;
+    state.converterPanel.root.style.display = 'block';
+  }
+
+  function hideConverterPanel() {
+    state.converterPanelOpen = false;
+    if (state.converterPanel) state.converterPanel.root.style.display = 'none';
+  }
+
+  function toggleConverterPanel() {
+    if (state.converterPanelOpen) {
+      hideConverterPanel();
+    } else {
+      showConverterPanel();
+    }
+  }
+
+  // Converts a computed-style value (color or px length) into alternative
+  // representations for the click-to-convert feature in "Show all styles".
+  // Returns null when the value isn't a recognized, convertible format.
+  function toHex2(n) {
+    var h = n.toString(16);
+    return h.length === 1 ? '0' + h : h;
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+  }
+
+  function getRootFontSizePx() {
+    var m = /^([\d.]+)px$/.exec(getComputedStyle(document.documentElement).fontSize);
+    return m ? parseFloat(m[1]) : null;
+  }
+
+  // rootPx overrides the root font-size used for px->rem (used by the
+  // standalone converter panel, where the current page's actual root
+  // font-size is often not what the user means). When omitted, falls back
+  // to the current page's live root font-size — correct for the info
+  // panel's click-to-convert, which converts a value actually taken from
+  // that page.
+  function getValueConversions(value, rootPx) {
+    var v = value.trim();
+    var c = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)$/i.exec(v);
+    if (c) {
+      var r = parseInt(c[1], 10), g = parseInt(c[2], 10), b = parseInt(c[3], 10);
+      var a = c[4] !== undefined ? parseFloat(c[4]) : 1;
+      var hsl = rgbToHsl(r, g, b);
+      return [
+        { label: 'hex', value: '#' + toHex2(r) + toHex2(g) + toHex2(b) },
+        { label: 'rgb', value: 'rgb(' + r + ', ' + g + ', ' + b + ')' },
+        { label: 'rgba', value: 'rgba(' + r + ', ' + g + ', ' + b + ', ' + a + ')' },
+        { label: 'hsl', value: 'hsl(' + hsl[0] + ', ' + hsl[1] + '%, ' + hsl[2] + '%)' },
+        { label: 'hsla', value: 'hsla(' + hsl[0] + ', ' + hsl[1] + '%, ' + hsl[2] + '%, ' + a + ')' }
+      ];
+    }
+    var px = /^(-?[\d.]+)px$/.exec(v);
+    if (px) {
+      var root = (typeof rootPx === 'number' && rootPx > 0) ? rootPx : getRootFontSizePx();
+      if (root) {
+        var rem = Math.round((parseFloat(px[1]) / root) * 10000) / 10000;
+        return [{ label: 'rem', value: rem + 'rem' }];
+      }
+    }
+    return null;
+  }
+
+  // Cheap, getComputedStyle-free check used at render time to decide whether
+  // a value gets the clickable/underline styling — the actual conversion
+  // (and the getComputedStyle(document.documentElement) call it requires for
+  // px->rem) is deferred to the click handler in renderInfoRow, since running
+  // it eagerly for every one of the ~300+ rows in "Show all styles" forces
+  // repeated style/layout recalculation of the whole host page.
+  function isConvertibleValue(value) {
+    var v = value.trim();
+    return /^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+)?\s*\)$/i.test(v) ||
+      /^-?[\d.]+px$/.test(v);
+  }
+
+  function renderInfoRow(container, label, value, extraBtn, convertible) {
+    var wrap = document.createElement('div');
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:3px 0;border-bottom:1px solid #333';
     var labelEl = document.createElement('span');
@@ -665,7 +989,31 @@ function nodeNukerToggle() {
     row.appendChild(valueEl);
     row.appendChild(copyBtn);
     if (extraBtn) row.appendChild(extraBtn);
-    container.appendChild(row);
+    wrap.appendChild(row);
+
+    if (convertible && isConvertibleValue(value)) {
+      valueEl.style.cursor = 'pointer';
+      valueEl.style.textDecoration = 'underline dotted';
+      valueEl.title = value + ' (click to convert)';
+      var convBox = null;
+      valueEl.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!convBox) {
+          var conversions = getValueConversions(value);
+          if (!conversions || !conversions.length) return;
+          convBox = document.createElement('div');
+          convBox.style.cssText = 'display:none;padding:2px 0 2px 10px;margin-bottom:4px;border-left:2px solid ' + COLOR_BTN_BORDER;
+          conversions.forEach(function (cv) {
+            renderInfoRow(convBox, cv.label, cv.value);
+          });
+          wrap.appendChild(convBox);
+        }
+        convBox.style.display = convBox.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
+    container.appendChild(wrap);
   }
 
   // Small inline button rendered next to the "style" attribute row, opening
@@ -749,19 +1097,30 @@ function nodeNukerToggle() {
     panel.toggleAll.onclick = backToQuickInfo(panel, el);
   }
 
-  function renderStyleGroup(container, title, entries) {
+  function renderStyleGroup(container, name, title, entries, collapsed, onToggle) {
+    var group = document.createElement('div');
+    group.id = 'style-group-' + name;
+
     var header = document.createElement('div');
-    header.style.cssText = 'opacity:.55;text-transform:uppercase;letter-spacing:.04em;font-size:10px;font-weight:700;margin:10px 0 2px';
-    header.textContent = title + ' (' + entries.length + ')';
-    container.appendChild(header);
-    if (!entries.length) {
-      var empty = document.createElement('div');
-      empty.style.opacity = '.7';
-      empty.textContent = '(none)';
-      container.appendChild(empty);
-    } else {
-      entries.forEach(function (f) { renderInfoRow(container, f.label, f.value); });
+    header.id = 'style-group-toggle-' + name;
+    header.style.cssText = 'opacity:.55;text-transform:uppercase;letter-spacing:.04em;font-size:10px;font-weight:700;margin:10px 0 2px' +
+      (onToggle ? ';cursor:pointer;user-select:none' : '');
+    header.textContent = (onToggle ? (collapsed ? '▸ ' : '▾ ') : '') + title + ' (' + entries.length + ')';
+    if (onToggle) header.addEventListener('click', onToggle);
+    group.appendChild(header);
+
+    if (!collapsed) {
+      if (!entries.length) {
+        var empty = document.createElement('div');
+        empty.style.opacity = '.7';
+        empty.textContent = '(none)';
+        group.appendChild(empty);
+      } else {
+        entries.forEach(function (f) { renderInfoRow(group, f.label, f.value, null, true); });
+      }
     }
+
+    container.appendChild(group);
   }
 
   function renderAllStyles(panel, el) {
@@ -775,13 +1134,15 @@ function nodeNukerToggle() {
     var search = document.createElement('input');
     search.type = 'search';
     search.placeholder = 'Filter styles…';
-    search.style.cssText = PTR_AUTO + ';display:block;width:100%;box-sizing:border-box' +
+    search.style.cssText = 'pointer-events:auto;display:block;width:100%;box-sizing:border-box' +
       ';background:' + COLOR_BTN_BG + ';border:1px solid ' + COLOR_BTN_BORDER +
       ';border-radius:6px;color:' + COLOR_TEXT + ';padding:4px 8px;font:11px monospace;margin-bottom:8px';
     panel.body.appendChild(search);
 
     var list = document.createElement('div');
     panel.body.appendChild(list);
+
+    var collapsedState = { own: false, inherited: true, def: true };
 
     function renderFiltered() {
       var q = search.value.trim().toLowerCase();
@@ -790,9 +1151,18 @@ function nodeNukerToggle() {
         return entries.filter(function (f) { return f.label.toLowerCase().indexOf(q) !== -1; });
       }
       list.innerHTML = '';
-      renderStyleGroup(list, 'Set on this element', matching(groups.own));
-      renderStyleGroup(list, 'Inherited', matching(groups.inherited));
-      renderStyleGroup(list, 'Browser default', matching(groups.default));
+      renderStyleGroup(list, 'own', 'Set on this element', matching(groups.own), collapsedState.own, function () {
+        collapsedState.own = !collapsedState.own;
+        renderFiltered();
+      });
+      renderStyleGroup(list, 'inherited', 'Inherited', matching(groups.inherited), collapsedState.inherited, function () {
+        collapsedState.inherited = !collapsedState.inherited;
+        renderFiltered();
+      });
+      renderStyleGroup(list, 'default', 'Browser default', matching(groups.default), collapsedState.def, function () {
+        collapsedState.def = !collapsedState.def;
+        renderFiltered();
+      });
     }
     search.addEventListener('input', renderFiltered);
     renderFiltered();
@@ -909,7 +1279,12 @@ function nodeNukerToggle() {
     if (state.inverted) exitInvert();
     state.selected = el;
     updateImageState();
-    updateInfoPanel();
+    if (state.settings.autoOpenInfoPanel && !state.autoOpenedInfoPanel) {
+      state.autoOpenedInfoPanel = true;
+      showInfoPanel();
+    } else {
+      updateInfoPanel();
+    }
     positionBox(state.selectBox, el);
     updateParentBox();
     updateHoverBox();
@@ -1164,11 +1539,23 @@ function nodeNukerToggle() {
     });
   }
 
+  // Returning to the browser window/tab after switching away (another app,
+  // another tab) can leave keyboard focus stuck on browser chrome (e.g. the
+  // address bar) rather than the page, which silently swallows NodeNuker's
+  // keydown shortcuts until the user clicks into the page. Pulling focus
+  // onto the (invisible, tabIndex:-1) HUD root on window focus avoids that.
+  function onWindowFocus() {
+    if (state.hud && state.hud.root) {
+      try { state.hud.root.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+
   function activate() {
     state.hoverBox = makeBox(COLOR_HOVER);
     state.selectBox = makeBox(COLOR_DELETE, false, true);
     state.parentBox = makeBox(COLOR_PARENT, true);
     state.hud = buildHud();
+    state.settingsToolbar = buildSettingsToolbar();
     updateHud();
     updateImageState();
 
@@ -1177,6 +1564,7 @@ function nodeNukerToggle() {
     document.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize, true);
+    window.addEventListener('focus', onWindowFocus);
   }
 
   function deactivate() {
@@ -1188,6 +1576,7 @@ function nodeNukerToggle() {
     document.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('scroll', onScrollOrResize, true);
     window.removeEventListener('resize', onScrollOrResize, true);
+    window.removeEventListener('focus', onWindowFocus);
     document.querySelectorAll('[' + NS + ']').forEach(function (n) {
       if (n.parentNode) n.parentNode.removeChild(n);
     });

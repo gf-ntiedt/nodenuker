@@ -2,7 +2,7 @@
 
 A tool for interactively picking, deleting, and undoing DOM elements on any page — no dependencies, available as a bookmarklet or a userscript.
 
-Current version: **1.3.1**
+Current version: **1.4.0**
 
 ## Install
 
@@ -76,9 +76,25 @@ Only attributes/properties that actually have a value are listed — e.g. a bool
 
 If the element has a `style` attribute, its row gets an extra `⋯` button that opens a per-declaration breakdown of just that attribute (one row per CSS property, each individually copyable) — separate from, and not to be confused with, the `Show all styles` view described below. `← Back` returns from it to the main info view.
 
-The panel updates automatically as the selection changes (via click, `p`, `c`, `b`, `n`, or `z`) while it's open, and stays open across those changes until closed with its `×` button. A `Copy all` button copies every visible attribute at once. A `Show all styles` button switches the panel to every computed CSS property for the element, one row per property with its own copy button, grouped into three sections: **Set on this element** (declared via inline style or a matching same-origin stylesheet rule), **Inherited** (a standard-CSS-inherited property whose value comes from an ancestor), and **Browser default** (neither of the above). A filter field above the list narrows it down to properties whose name contains the typed text. Its own `Copy all styles` button copies the full grouped list as text. Both the `⋯` detail view and `Show all styles` view show a `← Back` button at the top of the panel (next to the title) in addition to the one at the bottom, so it's reachable without scrolling through a long list.
+The panel updates automatically as the selection changes (via click, `p`, `c`, `b`, `n`, or `z`) while it's open, and stays open across those changes until closed with its `×` button. A `Copy all` button copies every visible attribute at once. A `Show all styles` button switches the panel to every computed CSS property for the element, one row per property with its own copy button, grouped into three sections: **Set on this element** (declared via inline style or a matching same-origin stylesheet rule), **Inherited** (a standard-CSS-inherited property whose value comes from an ancestor), and **Browser default** (neither of the above). All three sections are collapsible (click the section header); **Set on this element** starts expanded, **Inherited** and **Browser default** start collapsed. A filter field above the list narrows it down to properties whose name contains the typed text. Its own `Copy all styles` button copies the full grouped list as text. Both the `⋯` detail view and `Show all styles` view show a `← Back` button at the top of the panel (next to the title) in addition to the one at the bottom, so it's reachable without scrolling through a long list.
+
+In the `Show all styles` view, a value that's a color (`rgb()`/`rgba()`) or a `px` length is underlined and clickable — clicking it expands an inline list of equivalent representations (color: `hex`/`rgb`/`rgba`/`hsl`/`hsla`; length: `rem`, based on the root element's font size), each individually copyable. Clicking the value again collapses it. This conversion is only available in this view, since it relies on computed values already being normalized to `rgb()`/`px`.
 
 **Limitation:** the "Set on this element" detection can't read cross-origin stylesheets that don't send permissive CORS headers (`stylesheet.cssRules` throws and is silently skipped) — a property declared only in such a stylesheet is misclassified as "Inherited" or "Browser default" instead. `@media`/`@supports` conditions also aren't evaluated, so a property inside a currently-non-matching conditional block is still counted as set.
+
+### Settings (`⚙`)
+
+A small toolbar in the top-left corner (flush against the edge) offers a `⚙` button (Settings) and a `⇄` button (Unit converter, see below) — both independent of any element selection.
+
+Clicking `⚙` opens a panel with:
+
+- **Open info panel automatically on first selection** — when enabled, selecting the first element after activating NodeNuker opens the `ⓘ` info panel right away, instead of requiring a separate click on `ⓘ`. Persisted across sessions (stored in the browser's `localStorage`, per site).
+
+### Unit converter (`⇄`)
+
+Clicking `⇄` opens a standalone converter, independent of any selected element: type a color (`rgb()`/`rgba()`) or a `px` length into the input field and see all equivalent representations immediately — the same conversions as the click-to-convert feature in `Show all styles` above (color: `hex`/`rgb`/`rgba`/`hsl`/`hsla`; length: `rem`).
+
+Since `rem` is relative to the page's root (`<html>`) font-size, which varies from site to site, the converter shows a **Root font-size** field pre-filled with the current page's live value (falls back to the standard `16px` if unavailable) — it's editable, so you can convert against any font-size you like, and a `↻` button resets it back to the current page's live value.
 
 ## Notes / limitations
 
@@ -87,6 +103,7 @@ The panel updates automatically as the selection changes (via click, `p`, `c`, `
 - Only operates on the top-level document — elements inside `<iframe>` documents are not reachable.
 - The undo stack lives in memory only and is lost when NodeNuker is deactivated or the page is reloaded.
 - Image detection only recognizes `<img>` elements and the first `url(...)` in `background-image`; SVG `<image>` elements and multiple stacked background images are not specially handled.
+- Returning to the browser tab/window after switching away (to another app, or another browser tab) automatically restores keyboard focus to NodeNuker, so hotkeys keep working immediately without needing to click into the page first.
 
 ## Files
 
